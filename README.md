@@ -70,6 +70,21 @@ with a 2^22-cycle shard size so it spans several shards), `journal` (commits
 Rust and the committed artifacts (build with `SP1_SKIP_PROGRAM_BUILD=true`
 to skip the guest build).
 
+```sh
+./patch.sh                              # once; fetches the pinned Plonky3 crates and applies patches/
+cargo run --release -- count <guest>    # writes results/sp1/ops.json
+```
+
+`count` verifies the proof with `LightProver` and writes the operation
+ledger. SP1 has no hash-suite injection point, so the counters are patches
+to the Plonky3 crates it uses: `p3-field` holds the counters and instruments
+`exp_u64_by_squaring`; `p3-koala-bear` counts `Add`/`Sub`/`Mul`/`Sum` and
+`try_inverse`; `p3-symmetric` and `p3-challenger` count the permutations
+performed by `TruncatedPermutation::compress`, `PaddingFreeSponge` and
+`DuplexChallenger`, and attribute the field operations inside each to the
+hash. The ledger has the same shape as Risc0's, with `mul_per_permutation`
+(296 for this Poseidon2: width 16, `x^3`) as the integrality check.
+
 ## Stwo
 
 The guests are Cairo 0 programs (`stwo/programs/<guest>/<guest>.cairo`),

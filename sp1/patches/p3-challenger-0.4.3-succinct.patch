@@ -1,0 +1,13 @@
+--- a/src/duplex_challenger.rs
++++ b/src/duplex_challenger.rs
+@@ -49,7 +49,9 @@
+         }
+ 
+         // Apply the permutation.
+-        self.permutation.permute_mut(&mut self.sponge_state);
++        p3_field::counters::hash_permutation(&p3_field::counters::PERM_DUPLEX, || {
++            self.permutation.permute_mut(&mut self.sponge_state)
++        });
+ 
+         self.output_buffer.clear();
+         self.output_buffer.extend(&self.sponge_state[0..RATE]);

@@ -4,3 +4,10 @@ members = ["script"]
 
 [profile.release]
 lto = true
+
+[patch.crates-io]
+# Operation counters; see patch.sh and patches/.
+p3-challenger = { path = "patched/p3-challenger" }
+p3-field = { path = "patched/p3-field" }
+p3-koala-bear = { path = "patched/p3-koala-bear" }
+p3-symmetric = { path = "patched/p3-symmetric" }

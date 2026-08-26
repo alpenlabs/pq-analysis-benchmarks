@@ -1,0 +1,59 @@
+--- a/src/compression.rs
++++ b/src/compression.rs
+@@ -41,7 +41,9 @@
+             pre[i * CHUNK..(i + 1) * CHUNK]
+                 .copy_from_slice(Borrow::<[T; CHUNK]>::borrow(&input[i]).as_slice());
+         }
+-        let post = self.inner_permutation.permute(pre);
++        let post = p3_field::counters::hash_permutation(&p3_field::counters::PERM_COMPRESS, || {
++            self.inner_permutation.permute(pre)
++        });
+         let post_arr: [T; CHUNK] = post[..CHUNK].try_into().unwrap();
+         post_arr.into()
+     }
+@@ -61,7 +63,9 @@
+             pre[i * CHUNK..(i + 1) * CHUNK]
+                 .copy_from_slice(Borrow::<[T; CHUNK]>::borrow(&input[i]).as_slice());
+         }
+-        let post = self.inner_permutation.permute(pre);
++        let post = p3_field::counters::hash_permutation(&p3_field::counters::PERM_COMPRESS, || {
++            self.inner_permutation.permute(pre)
++        });
+         let post_arr: [T; CHUNK] = post[..CHUNK].try_into().unwrap();
+         post_arr.into()
+     }
+--- a/src/sponge.rs
++++ b/src/sponge.rs
+@@ -38,7 +38,9 @@
+         let mut state = [T::default(); WIDTH];
+         for input_chunk in &input.into_iter().chunks(RATE) {
+             state.iter_mut().zip(input_chunk).for_each(|(s, i)| *s = i);
+-            state = self.permutation.permute(state);
++            state = p3_field::counters::hash_permutation(&p3_field::counters::PERM_SPONGE, || {
++                self.permutation.permute(state)
++            });
+         }
+         state[..OUT].try_into().unwrap()
+     }
+@@ -102,7 +104,9 @@
+             {
+                 state[chunk_id] = reduce_31(&chunk.collect_vec());
+             }
+-            state = self.permutation.permute(state);
++            state = p3_field::counters::hash_permutation(&p3_field::counters::PERM_SPONGE, || {
++                self.permutation.permute(state)
++            });
+         }
+ 
+         let inner_arr: [PF; OUT] = state[..OUT].try_into().unwrap();
+@@ -129,7 +133,9 @@
+             {
+                 state[chunk_id] = reduce_31(&chunk.collect_vec());
+             }
+-            state = self.permutation.permute(state);
++            state = p3_field::counters::hash_permutation(&p3_field::counters::PERM_SPONGE, || {
++                self.permutation.permute(state)
++            });
+         }
+ 
+         state[..OUT].try_into().unwrap()

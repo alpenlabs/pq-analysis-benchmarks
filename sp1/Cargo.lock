@@ -2176,8 +2176,6 @@ dependencies = [
 [[package]]
 name = "p3-challenger"
 version = "0.4.3-succinct"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6a908924d43e4cfb93fb41c8346cac211b70314385a9037e9241f5b7f3eaf77"
 dependencies = [
  "p3-field",
  "p3-maybe-rayon",
@@ -2217,8 +2215,6 @@ dependencies = [
 [[package]]
 name = "p3-field"
 version = "0.4.3-succinct"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3dc75969ca3ac847f43e632ab979d59ff7a68f9eac8dbf8edcbba47fc2e1d3aa"
 dependencies = [
  "itertools 0.12.1",
  "num-bigint 0.4.8",
@@ -2275,8 +2271,6 @@ dependencies = [
 [[package]]
 name = "p3-koala-bear"
 version = "0.4.3-succinct"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a9683cd0ef68100df7c62490533047bcf19c04c4a0fa1efc9d7c1e03e31f6b3"
 dependencies = [
  "cfg-if",
  "num-bigint 0.4.8",
@@ -2362,8 +2356,6 @@ dependencies = [
 [[package]]
 name = "p3-symmetric"
 version = "0.4.3-succinct"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9047ce85c086a9b3f118e10078f10636f7bfeed5da871a04da0b61400af8793a"
 dependencies = [
  "itertools 0.12.1",
  "p3-field",
@@ -3112,7 +3104,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bincode",
+ "p3-field",
  "serde",
+ "serde_json",
  "sp1-build",
  "sp1-sdk",
 ]

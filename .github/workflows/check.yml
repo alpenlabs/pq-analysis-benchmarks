@@ -78,12 +78,23 @@ jobs:
           cache-on-failure: true
           workspaces: sp1
 
+      - name: Apply Plonky3 patches
+        run: ./sp1/patch.sh
+
       - name: size
         working-directory: sp1
         run: |
           for g in trivial fib journal; do
             cargo run --release --locked -- size "$g" | tee "size-$g.txt"
             grep -q '^ 1272546  proof total (incl. enum tag)$' "size-$g.txt"
+          done
+
+      - name: count
+        working-directory: sp1
+        run: |
+          for g in trivial fib journal; do
+            cargo run --release --locked -- count "$g" "count-$g.json"
+            diff "count-$g.json" ../results/sp1/ops.json
           done
 
   stwo:

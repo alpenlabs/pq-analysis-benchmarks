@@ -41,9 +41,9 @@ jobs:
           cache-on-failure: true
           workspaces: ${{ matrix.workspace }}
 
-      - name: Apply risc0-core patch
-        if: matrix.workspace == 'risc0'
-        run: ./risc0/patch.sh
+      - name: Apply crate patches
+        working-directory: ${{ matrix.workspace }}
+        run: '[ ! -x patch.sh ] || ./patch.sh'
 
       - run: cargo clippy --workspace --locked --all-targets
         working-directory: ${{ matrix.workspace }}

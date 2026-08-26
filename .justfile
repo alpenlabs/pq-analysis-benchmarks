@@ -10,8 +10,8 @@ default:
 each +args:
     #!/usr/bin/env bash
     set -euo pipefail
-    [ -d risc0/patched/risc0-core ] || ./risc0/patch.sh
     for ws in {{workspaces}}; do
+        [ ! -x "$ws/patch.sh" ] || [ -d "$ws/patched" ] || "./$ws/patch.sh"
         echo "== $ws"
         (cd "$ws" && RISC0_SKIP_BUILD=1 SP1_SKIP_PROGRAM_BUILD=true cargo {{args}})
     done
@@ -73,7 +73,7 @@ lint-fix: fmt-toml fmt-ws lint-fix-ws lint-fix-codespell
 
 # Re-derive the committed results from the committed artifacts (what CI runs)
 [group('check')]
-check: patch-risc0
+check: patch-risc0 patch-sp1
     #!/usr/bin/env bash
     set -euo pipefail
     cd risc0
@@ -85,6 +85,8 @@ check: patch-risc0
     cd ../sp1
     for g in trivial fib journal; do
         SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- size "$g"
+        SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- count "$g" "count-$g.json"
+        diff "count-$g.json" ../results/sp1/ops.json
     done
     cd ../stwo
     for g in trivial fib journal; do
@@ -96,6 +98,11 @@ check: patch-risc0
 [group('prerequisites')]
 patch-risc0:
     ./risc0/patch.sh
+
+# Fetch the Plonky3 crates and apply sp1/patches/ into sp1/patched/
+[group('prerequisites')]
+patch-sp1:
+    ./sp1/patch.sh
 
 # Prove the Risc0 guests and write artifacts/risc0/<guest>.bin (needs r0vm)
 [group('prove')]
@@ -109,7 +116,7 @@ prove-risc0: patch-risc0
 
 # Prove the SP1 guests and write artifacts/sp1/<guest>.{bin,vk} (needs cargo prove)
 [group('prove')]
-prove-sp1:
+prove-sp1: patch-sp1
     #!/usr/bin/env bash
     set -euo pipefail
     cd sp1

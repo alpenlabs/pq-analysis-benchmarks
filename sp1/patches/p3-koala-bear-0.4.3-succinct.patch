@@ -1,0 +1,48 @@
+--- a/src/koala_bear.rs
++++ b/src/koala_bear.rs
+@@ -206,6 +206,7 @@
+     }
+ 
+     fn try_inverse(&self) -> Option<Self> {
++        p3_field::counters::bump(&p3_field::counters::INV_CALLS);
+         if self.is_zero() {
+             return None;
+         }
+@@ -312,6 +313,7 @@
+ 
+     #[inline]
+     fn add(self, rhs: Self) -> Self {
++        p3_field::counters::bump(&p3_field::counters::ADD);
+         let mut sum = self.value + rhs.value;
+         let (corr_sum, over) = sum.overflowing_sub(P);
+         if !over {
+@@ -335,7 +337,12 @@
+         // There might be a faster reduction method possible for lengths <= 16 which avoids %.
+ 
+         // This sum will not overflow so long as iter.len() < 2^33.
+-        let sum = iter.map(|x| (x.value as u64)).sum::<u64>();
++        let sum = iter
++            .map(|x| {
++                p3_field::counters::bump(&p3_field::counters::ADD);
++                x.value as u64
++            })
++            .sum::<u64>();
+         Self {
+             value: (sum % P as u64) as u32,
+         }
+@@ -347,6 +354,7 @@
+ 
+     #[inline]
+     fn sub(self, rhs: Self) -> Self {
++        p3_field::counters::bump(&p3_field::counters::SUB);
+         let (mut diff, over) = self.value.overflowing_sub(rhs.value);
+         let corr = if over { P } else { 0 };
+         diff = diff.wrapping_add(corr);
+@@ -375,6 +383,7 @@
+ 
+     #[inline]
+     fn mul(self, rhs: Self) -> Self {
++        p3_field::counters::bump(&p3_field::counters::MUL);
+         let long_prod = self.value as u64 * rhs.value as u64;
+         Self {
+             value: monty_reduce(long_prod),

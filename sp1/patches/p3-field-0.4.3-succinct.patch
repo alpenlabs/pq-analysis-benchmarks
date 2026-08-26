@@ -1,0 +1,78 @@
+--- a/src/exponentiation.rs
++++ b/src/exponentiation.rs
+@@ -1,6 +1,13 @@
+ use crate::AbstractField;
+ 
+ pub fn exp_u64_by_squaring<AF: AbstractField>(val: AF, power: u64) -> AF {
++    use crate::counters::{self, POW_ADD, POW_CALLS, POW_MUL, POW_SUB};
++    counters::attribute(&POW_CALLS, [&POW_ADD, &POW_SUB, &POW_MUL], || {
++        exp_u64_by_squaring_inner(val, power)
++    })
++}
++
++fn exp_u64_by_squaring_inner<AF: AbstractField>(val: AF, power: u64) -> AF {
+     let mut current = val;
+     let mut product = AF::one();
+ 
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -12,6 +12,59 @@
+ mod helpers;
+ mod packed;
+ 
++/// Operation counters read by the stark-boolean-verifier harness. Added by
++/// its patch; not part of upstream p3-field.
++pub mod counters {
++    use core::sync::atomic::{AtomicU64, Ordering::Relaxed};
++
++    /// KoalaBear additions (`Sum` counts one per summand).
++    pub static ADD: AtomicU64 = AtomicU64::new(0);
++    /// KoalaBear subtractions (`Neg` is `0 - x` and lands here).
++    pub static SUB: AtomicU64 = AtomicU64::new(0);
++    /// KoalaBear multiplications, including those inside `exp_u64_by_squaring` and `try_inverse`.
++    pub static MUL: AtomicU64 = AtomicU64::new(0);
++    /// `exp_u64_by_squaring` calls.
++    pub static POW_CALLS: AtomicU64 = AtomicU64::new(0);
++    /// Field operations spent inside `exp_u64_by_squaring`; depend on the exponent bits.
++    pub static POW_ADD: AtomicU64 = AtomicU64::new(0);
++    pub static POW_SUB: AtomicU64 = AtomicU64::new(0);
++    pub static POW_MUL: AtomicU64 = AtomicU64::new(0);
++    /// KoalaBear `try_inverse` calls (fixed 29 squarings + 7 multiplications each).
++    pub static INV_CALLS: AtomicU64 = AtomicU64::new(0);
++    /// Permutations performed by `PaddingFreeSponge`-style hashers.
++    pub static PERM_SPONGE: AtomicU64 = AtomicU64::new(0);
++    /// Permutations performed by `TruncatedPermutation::compress`.
++    pub static PERM_COMPRESS: AtomicU64 = AtomicU64::new(0);
++    /// Permutations performed by `DuplexChallenger::duplexing`.
++    pub static PERM_DUPLEX: AtomicU64 = AtomicU64::new(0);
++    /// Field operations spent inside the permutations counted above.
++    pub static HASH_ADD: AtomicU64 = AtomicU64::new(0);
++    pub static HASH_SUB: AtomicU64 = AtomicU64::new(0);
++    pub static HASH_MUL: AtomicU64 = AtomicU64::new(0);
++
++    #[inline(always)]
++    pub fn bump(c: &AtomicU64) {
++        c.fetch_add(1, Relaxed);
++    }
++
++    /// Run `f`, counting the call in `calls` and attributing the field
++    /// operations it performs to `into` (`[ADD, SUB, MUL]` order).
++    pub fn attribute<R>(calls: &AtomicU64, into: [&AtomicU64; 3], f: impl FnOnce() -> R) -> R {
++        bump(calls);
++        let before = [&ADD, &SUB, &MUL].map(|c| c.load(Relaxed));
++        let r = f();
++        for (i, c) in [&ADD, &SUB, &MUL].iter().enumerate() {
++            into[i].fetch_add(c.load(Relaxed) - before[i], Relaxed);
++        }
++        r
++    }
++
++    /// One hash permutation, counted in `bucket`, its field operations in `HASH_*`.
++    pub fn hash_permutation<R>(bucket: &AtomicU64, f: impl FnOnce() -> R) -> R {
++        attribute(bucket, [&HASH_ADD, &HASH_SUB, &HASH_MUL], f)
++    }
++}
++
+ pub use array::*;
+ pub use batch_inverse::*;
+ pub use exponentiation::*;

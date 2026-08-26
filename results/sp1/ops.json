@@ -1,0 +1,33 @@
+{
+  "system": "sp1",
+  "version": "6.3.1",
+  "artifact": "compressed proof",
+  "hash": {
+    "function": "poseidon2-koalabear",
+    "permutations": {
+      "truncated_permutation_compress": 34018,
+      "padding_free_sponge": 4026,
+      "duplex_challenger": 1545,
+      "total": 39589
+    }
+  },
+  "field": {
+    "base": "koalabear",
+    "counted_at": "KoalaBear Add/Sub/Mul impls; extension-field ops decompose into these",
+    "in_hash_suite": {
+      "mul": 11718344,
+      "add": 32938048,
+      "sub": 791780
+    },
+    "residual": {
+      "mul": 1690022,
+      "add": 975935,
+      "sub": 176132
+    },
+    "pow": {
+      "calls": 124,
+      "inv_calls": 13414
+    },
+    "mul_per_permutation": 296
+  }
+}

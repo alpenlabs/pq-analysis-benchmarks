@@ -1,10 +1,14 @@
 //! `prove <guest>`: run the guest and write a compressed proof and verifying key to
 //! `artifacts/sp1/<guest>.{bin,vk}`.
 //! `size <guest>`:  read them back and report the serialized size per component.
+//! `count <guest> [out]`: verify the proof with the patched Plonky3 crates and
+//!                  write the operation ledger as JSON (default
+//!                  `results/sp1/ops.json`; it is the same for every guest).
 //!
 //! Guests: trivial, fib, journal.
 
 use anyhow::{bail, Result};
+use p3_field::counters as c;
 use serde::Serialize;
 use sp1_sdk::blocking::{LightProver, ProveRequest, Prover, ProverClient};
 use sp1_sdk::prover::ProvingKey;
@@ -114,6 +118,151 @@ fn size(name: &str) -> Result<()> {
     Ok(())
 }
 
+#[derive(Clone, Copy, Default, Serialize)]
+struct Ops {
+    mul: u64,
+    add: u64,
+    sub: u64,
+}
+
+#[derive(Serialize)]
+struct Ledger {
+    system: &'static str,
+    version: &'static str,
+    artifact: &'static str,
+    hash: Hash,
+    field: Field,
+}
+
+#[derive(Serialize)]
+struct Hash {
+    function: &'static str,
+    permutations: Perms,
+}
+
+/// Poseidon2 permutations, by the p3-symmetric / p3-challenger site that
+/// performs them.
+#[derive(Serialize)]
+struct Perms {
+    truncated_permutation_compress: u64,
+    padding_free_sponge: u64,
+    duplex_challenger: u64,
+    total: u64,
+}
+
+#[derive(Serialize)]
+struct Field {
+    base: &'static str,
+    counted_at: &'static str,
+    /// Spent inside the permutations counted above. Charged to the hash.
+    in_hash_suite: Ops,
+    /// The verifier's own arithmetic, excluding the hash and the operations
+    /// inside `exp_u64_by_squaring`.
+    residual: Ops,
+    pow: Pow,
+    /// `in_hash_suite.mul / permutations`; exact.
+    mul_per_permutation: u64,
+}
+
+#[derive(Serialize)]
+struct Pow {
+    /// `exp_u64_by_squaring` calls; their operation count depends on the
+    /// exponent bits, so it is kept out of `residual`.
+    calls: u64,
+    /// KoalaBear `try_inverse` calls, a fixed 29 squarings + 7 multiplications each.
+    inv_calls: u64,
+}
+
+fn load(a: &std::sync::atomic::AtomicU64) -> u64 {
+    a.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+fn count(name: &str, out: &str) -> Result<()> {
+    let (proof_path, vk_path) = paths(name);
+    let proof = SP1ProofWithPublicValues::load(&proof_path)?;
+    let vk: SP1VerifyingKey = bincode::deserialize(&std::fs::read(&vk_path)?)?;
+    // Parallel reductions combine partial sums with extra additions whose
+    // number depends on how rayon splits the work; one thread makes the
+    // count deterministic and equal to the sequential verifier's.
+    std::env::set_var("RAYON_NUM_THREADS", "1");
+    let before = [&c::MUL, &c::ADD, &c::SUB].map(load);
+    LightProver::new().verify(&proof, &vk, None)?;
+    let d = |i: usize, a: &std::sync::atomic::AtomicU64| load(a) - before[i];
+    let total = Ops {
+        mul: d(0, &c::MUL),
+        add: d(1, &c::ADD),
+        sub: d(2, &c::SUB),
+    };
+    let in_pow = Ops {
+        mul: load(&c::POW_MUL),
+        add: load(&c::POW_ADD),
+        sub: load(&c::POW_SUB),
+    };
+    let in_hash_suite = Ops {
+        mul: load(&c::HASH_MUL),
+        add: load(&c::HASH_ADD),
+        sub: load(&c::HASH_SUB),
+    };
+    let perms = Perms {
+        truncated_permutation_compress: load(&c::PERM_COMPRESS),
+        padding_free_sponge: load(&c::PERM_SPONGE),
+        duplex_challenger: load(&c::PERM_DUPLEX),
+        total: load(&c::PERM_COMPRESS) + load(&c::PERM_SPONGE) + load(&c::PERM_DUPLEX),
+    };
+    assert_eq!(in_hash_suite.mul % perms.total, 0);
+    let ledger = Ledger {
+        system: "sp1",
+        version: "6.3.1",
+        artifact: "compressed proof",
+        hash: Hash {
+            function: "poseidon2-koalabear",
+            permutations: Perms { ..perms },
+        },
+        field: Field {
+            base: "koalabear",
+            counted_at: "KoalaBear Add/Sub/Mul impls; extension-field ops decompose into these",
+            in_hash_suite,
+            residual: Ops {
+                mul: total.mul - in_hash_suite.mul - in_pow.mul,
+                add: total.add - in_hash_suite.add - in_pow.add,
+                sub: total.sub - in_hash_suite.sub - in_pow.sub,
+            },
+            pow: Pow {
+                calls: load(&c::POW_CALLS),
+                inv_calls: load(&c::INV_CALLS),
+            },
+            mul_per_permutation: in_hash_suite.mul / perms.total,
+        },
+    };
+    let json = serde_json::to_string_pretty(&ledger)?;
+    std::fs::write(out, format!("{json}\n"))?;
+    let p = &ledger.hash.permutations;
+    println!("guest = {name}, poseidon2 permutations = {}", p.total);
+    for (name, n) in [
+        (
+            "truncated_permutation_compress",
+            p.truncated_permutation_compress,
+        ),
+        ("padding_free_sponge", p.padding_free_sponge),
+        ("duplex_challenger", p.duplex_challenger),
+    ] {
+        println!("{n:>8}  {name}");
+    }
+    let f = &ledger.field;
+    for (name, t, h, r) in [
+        ("mul", total.mul, f.in_hash_suite.mul, f.residual.mul),
+        ("add", total.add, f.in_hash_suite.add, f.residual.add),
+        ("sub", total.sub, f.in_hash_suite.sub, f.residual.sub),
+    ] {
+        println!("koalabear {name}: {t} measured = {h} in hash suite + {r} residual");
+    }
+    println!(
+        "  (+ {} mul, {} add, {} sub inside {} pow calls, exponent-dependent, not in the ledger)",
+        in_pow.mul, in_pow.add, in_pow.sub, f.pow.calls
+    );
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     match (
@@ -122,6 +271,11 @@ fn main() -> Result<()> {
     ) {
         (Some("prove"), Some(g)) => prove(g),
         (Some("size"), Some(g)) => size(g),
-        _ => bail!("usage: script prove|size <trivial|fib|journal>"),
+        (Some("count"), Some(g)) => count(
+            g,
+            args.get(3)
+                .map_or("../results/sp1/ops.json", String::as_str),
+        ),
+        _ => bail!("usage: script prove|size|count <trivial|fib|journal> [out.json]"),
     }
 }
