@@ -78,6 +78,8 @@ check:
     cd risc0
     for g in trivial fib journal; do
         RISC0_SKIP_BUILD=1 cargo run --release --locked -p host -- size "$g"
+        RISC0_SKIP_BUILD=1 cargo run --release --locked -p host -- count "$g" "count-$g.json"
+        diff "count-$g.json" ../results/risc0/hash.json
     done
     cd ../sp1
     for g in trivial fib journal; do

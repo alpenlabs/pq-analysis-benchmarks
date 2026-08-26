@@ -1142,8 +1142,10 @@ dependencies = [
  "anyhow",
  "bincode",
  "methods",
+ "risc0-zkp",
  "risc0-zkvm",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

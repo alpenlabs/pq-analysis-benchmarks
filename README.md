@@ -25,6 +25,20 @@ Guests: `trivial` (commits one `u32`), `fib` (a few million cycles, several
 segments), `journal` (commits 4 KiB). `size` needs only stable Rust and the
 committed receipts.
 
+```sh
+cargo run --release -p host -- count <guest>   # writes results/risc0/hash.json
+```
+
+`count` verifies the receipt with a counting `poseidon2` hash suite injected
+through `VerifierContext`, leaving the verifier code untouched, and records
+the number of Poseidon2 permutations per `HashFn`/`Rng` method
+(`risc0/host/src/count.rs`). The count is the same for every guest, since the
+succinct receipt proves the fixed recursion circuit; CI checks this by
+diffing each guest's output against the committed file. Poseidon2 is the hash
+the shipped verifier uses; the arithmetic inside its permutations is
+reported separately from the rest of the verifier so that a different hash
+can be costed in its place.
+
 ## SP1
 
 Install the SP1 toolchain (`sp1up`, providing `cargo prove`) following

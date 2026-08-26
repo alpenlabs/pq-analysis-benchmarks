@@ -1,0 +1,38 @@
+{
+  "system": "risc0",
+  "version": "3.0.5",
+  "artifact": "succinct receipt",
+  "hash": {
+    "function": "poseidon2-babybear",
+    "state_cells": 24,
+    "rate": 16,
+    "rounds_full": 8,
+    "rounds_partial": 21,
+    "permutations": {
+      "hash_pair": 4275,
+      "hash_elem_slice": 1221,
+      "hash_ext_elem_slice": 165,
+      "rng": 32,
+      "total": 5693
+    },
+    "calls": {
+      "hash_pair": 4275,
+      "hash_elem_slice": 354,
+      "hash_elem_slice_len_histogram": {
+        "12": 50,
+        "16": 52,
+        "23": 50,
+        "33": 1,
+        "64": 150,
+        "128": 50,
+        "256": 1
+      },
+      "hash_ext_elem_slice": 1,
+      "hash_ext_elem_slice_len_histogram": {
+        "659": 1
+      },
+      "rng_mix": 12,
+      "rng_elems_squeezed": 244
+    }
+  }
+}

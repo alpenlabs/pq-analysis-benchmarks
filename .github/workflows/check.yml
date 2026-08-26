@@ -46,6 +46,14 @@ jobs:
             grep -q '^  222668  seal (u32 words \* 4)$' "size-$g.txt"
           done
 
+      - name: count
+        working-directory: risc0
+        run: |
+          for g in trivial fib journal; do
+            cargo run --release --locked -p host -- count "$g" "count-$g.json"
+            diff "count-$g.json" ../results/risc0/hash.json
+          done
+      
   sp1:
     name: SP1 compressed proof
     runs-on: ubuntu-latest

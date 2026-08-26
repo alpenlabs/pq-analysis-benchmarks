@@ -1,7 +1,12 @@
 //! `prove <guest>`: run the guest and write a succinct receipt to `artifacts/risc0/<guest>.bin`.
 //! `size <guest>`:  read that receipt and report its serialized size per component.
+//! `count <guest> [out]`: verify that receipt with a counting hash suite and write
+//!                  the Poseidon2 permutation count as JSON (default
+//!                  `results/risc0/hash.json`; it is the same for every guest).
 //!
 //! Guests: trivial, fib, journal.
+
+mod count;
 
 use anyhow::{bail, Result};
 use risc0_zkvm::{default_prover, ExecutorEnv, InnerReceipt, ProverOpts, Receipt, VerifierContext};
@@ -70,6 +75,42 @@ fn size(name: &str) -> Result<()> {
     Ok(())
 }
 
+#[derive(Serialize)]
+struct Ledger {
+    system: &'static str,
+    version: &'static str,
+    artifact: &'static str,
+    hash: count::Hash,
+}
+
+fn count(name: &str, out: &str) -> Result<()> {
+    let receipt: Receipt = bincode::deserialize(&std::fs::read(receipt_path(name))?)?;
+    let (suite, counters) = count::counting_suite();
+    let mut suites = VerifierContext::default_hash_suites();
+    suites.insert(suite.name.clone(), suite);
+    let ctx = VerifierContext::default().with_suites(suites);
+    receipt.verify_integrity_with_context(&ctx)?;
+    let ledger = Ledger {
+        system: "risc0",
+        version: "3.0.5",
+        artifact: "succinct receipt",
+        hash: counters.report(),
+    };
+    let json = serde_json::to_string_pretty(&ledger)?;
+    std::fs::write(out, format!("{json}\n"))?;
+    let p = &ledger.hash.permutations;
+    println!("guest = {name}, poseidon2 permutations = {}", p.total);
+    for (name, n) in [
+        ("hash_pair", p.hash_pair),
+        ("hash_elem_slice", p.hash_elem_slice),
+        ("hash_ext_elem_slice", p.hash_ext_elem_slice),
+        ("rng", p.rng),
+    ] {
+        println!("{n:>8}  {name}");
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     match (
@@ -78,6 +119,11 @@ fn main() -> Result<()> {
     ) {
         (Some("prove"), Some(g)) => prove(g),
         (Some("size"), Some(g)) => size(g),
-        _ => bail!("usage: host prove|size <trivial|fib|journal>"),
+        (Some("count"), Some(g)) => count(
+            g,
+            args.get(3)
+                .map_or("../results/risc0/hash.json", String::as_str),
+        ),
+        _ => bail!("usage: host prove|size|count <trivial|fib|journal> [out.json]"),
     }
 }
