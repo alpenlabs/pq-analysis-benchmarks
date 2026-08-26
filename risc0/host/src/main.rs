@@ -1,8 +1,9 @@
 //! `prove <guest>`: run the guest and write a succinct receipt to `artifacts/risc0/<guest>.bin`.
 //! `size <guest>`:  read that receipt and report its serialized size per component.
-//! `count <guest> [out]`: verify that receipt with a counting hash suite and write
-//!                  the Poseidon2 permutation count as JSON (default
-//!                  `results/risc0/hash.json`; it is the same for every guest).
+//! `count <guest> [out]`: verify that receipt with a counting hash suite and
+//!                  patched field arithmetic, and write the operation ledger as
+//!                  JSON (default `results/risc0/ops.json`; it is the same for
+//!                  every guest).
 //!
 //! Guests: trivial, fib, journal.
 
@@ -81,6 +82,7 @@ struct Ledger {
     version: &'static str,
     artifact: &'static str,
     hash: count::Hash,
+    field: count::Field,
 }
 
 fn count(name: &str, out: &str) -> Result<()> {
@@ -89,12 +91,15 @@ fn count(name: &str, out: &str) -> Result<()> {
     let mut suites = VerifierContext::default_hash_suites();
     suites.insert(suite.name.clone(), suite);
     let ctx = VerifierContext::default().with_suites(suites);
+    let start = count::Ops::now();
     receipt.verify_integrity_with_context(&ctx)?;
+    let total = count::Ops::now().since(start);
     let ledger = Ledger {
         system: "risc0",
         version: "3.0.5",
         artifact: "succinct receipt",
         hash: counters.report(),
+        field: counters.field(total),
     };
     let json = serde_json::to_string_pretty(&ledger)?;
     std::fs::write(out, format!("{json}\n"))?;
@@ -108,6 +113,18 @@ fn count(name: &str, out: &str) -> Result<()> {
     ] {
         println!("{n:>8}  {name}");
     }
+    let f = &ledger.field;
+    for (name, t, h, r) in [
+        ("mul", total.mul, f.in_hash_suite.mul, f.residual.mul),
+        ("add", total.add, f.in_hash_suite.add, f.residual.add),
+        ("sub", total.sub, f.in_hash_suite.sub, f.residual.sub),
+    ] {
+        println!("babybear {name}: {t} measured = {h} in hash suite + {r} residual");
+    }
+    println!(
+        "  (mul: + {} inside {} pow calls, exponent-dependent, not in the ledger)",
+        total.pow_mul, f.pow.calls
+    );
     Ok(())
 }
 
@@ -122,7 +139,7 @@ fn main() -> Result<()> {
         (Some("count"), Some(g)) => count(
             g,
             args.get(3)
-                .map_or("../results/risc0/hash.json", String::as_str),
+                .map_or("../results/risc0/ops.json", String::as_str),
         ),
         _ => bail!("usage: host prove|size|count <trivial|fib|journal> [out.json]"),
     }

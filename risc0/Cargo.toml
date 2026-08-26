@@ -4,8 +4,13 @@ members = ["host", "methods"]
 
 [workspace.dependencies]
 methods = { path = "methods" }
+risc0-core = { version = "=3.0.2" }
 risc0-zkp = { version = "=3.0.5" }
 risc0-zkvm = { version = "=3.0.5" }
 
 [profile.release]
 lto = true
+
+[patch.crates-io]
+# Base-field operation counters; see patch.sh and patches/.
+risc0-core = { path = "patched/risc0-core" }

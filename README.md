@@ -7,8 +7,11 @@ Versions are pinned. Proof artifacts are committed under `artifacts/`, so
 every step except proving runs without a prover toolchain.
 
 Layout: `risc0/`, `sp1/`, `stwo/` hold one Rust workspace each.
-Instrumentation of third-party crates is kept as patch files under
-`patches/` and applied to the unmodified registry sources at build time.
+Instrumentation of third-party crates is kept as patch files
+(`<workspace>/patches/`) and applied by `<workspace>/patch.sh` to the
+unmodified crates.io sources, which Cargo then uses via `[patch.crates-io]`.
+`just check` re-derives everything under `results/` from the committed
+artifacts.
 
 ## Risc0
 
@@ -26,18 +29,29 @@ segments), `journal` (commits 4 KiB). `size` needs only stable Rust and the
 committed receipts.
 
 ```sh
-cargo run --release -p host -- count <guest>   # writes results/risc0/hash.json
+./patch.sh                                     # once; fetches risc0-core 3.0.2 and applies patches/
+cargo run --release -p host -- count <guest>   # writes results/risc0/ops.json
 ```
 
-`count` verifies the receipt with a counting `poseidon2` hash suite injected
-through `VerifierContext`, leaving the verifier code untouched, and records
-the number of Poseidon2 permutations per `HashFn`/`Rng` method
-(`risc0/host/src/count.rs`). The count is the same for every guest, since the
-succinct receipt proves the fixed recursion circuit; CI checks this by
-diffing each guest's output against the committed file. Poseidon2 is the hash
-the shipped verifier uses; the arithmetic inside its permutations is
-reported separately from the rest of the verifier so that a different hash
-can be costed in its place.
+`count` verifies the receipt and writes an operation ledger. Poseidon2
+permutations are counted by a `poseidon2` hash suite injected through
+`VerifierContext`, per `HashFn`/`Rng` method, without modifying the
+verifier (`risc0/host/src/count.rs`). BabyBear operations are counted by
+`patches/risc0-core-3.0.2.patch`, which adds a counter to each `Elem`
+operator impl and to `pow`/`inv` (extension-field operations decompose
+into base operations; Montgomery conversions are not counted). The hash
+suite snapshots the counters around every call it forwards, so the ledger
+separates `in_hash_suite` (the permutations, which are BabyBear arithmetic
+themselves) from `residual` (the rest of the verifier) by measurement;
+`mul_per_permutation` must come out an integer. Multiplications inside
+`pow` are listed as a call count rather than a multiplication count: `pow`
+is square-and-multiply and the verifier raises generators to Fiat-Shamir
+derived query positions, so that number varies with the seal (by a few
+hundred out of 687 thousand). Poseidon2 is the hash the shipped verifier
+uses; the split is what allows a different hash to be costed in its place.
+The ledger is the same for every guest, since the succinct receipt proves
+the fixed recursion circuit; CI diffs each guest's output against the
+committed file.
 
 ## SP1
 

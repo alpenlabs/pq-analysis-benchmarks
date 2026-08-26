@@ -34,5 +34,24 @@
       "rng_mix": 12,
       "rng_elems_squeezed": 244
     }
+  },
+  "field": {
+    "base": "babybear",
+    "counted_at": "Elem Add/Sub/Mul operator impls; extension-field ops decompose into these",
+    "in_hash_suite": {
+      "mul": 8949396,
+      "add": 13099689,
+      "sub": 0
+    },
+    "residual": {
+      "mul": 649387,
+      "add": 480016,
+      "sub": 31644
+    },
+    "pow": {
+      "calls": 2343,
+      "inv_calls": 450
+    },
+    "mul_per_permutation": 1572
   }
 }

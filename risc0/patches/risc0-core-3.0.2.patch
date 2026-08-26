@@ -1,0 +1,108 @@
+--- a/src/field/baby_bear.rs
++++ b/src/field/baby_bear.rs
+@@ -103,6 +103,7 @@
+     /// Note that if computed this way, the *inverse* of zero comes out as zero,
+     /// which we allow because it is convenient in many cases.
+     fn inv(self) -> Self {
++        counters::bump(&counters::INV_CALLS);
+         self.ensure_valid().pow((P - 2) as usize)
+     }
+ 
+@@ -222,11 +223,36 @@
+     }
+ }
+ 
++/// Operation counters. Added by the stark-boolean-verifier patch; not part of
++/// upstream risc0-core.
++pub mod counters {
++    use core::sync::atomic::{AtomicU64, Ordering::Relaxed};
++
++    /// `Elem` additions.
++    pub static ADD: AtomicU64 = AtomicU64::new(0);
++    /// `Elem` subtractions (`Neg` is `0 - x` and lands here).
++    pub static SUB: AtomicU64 = AtomicU64::new(0);
++    /// `Elem` multiplications, including those inside `pow` and `inv`.
++    pub static MUL: AtomicU64 = AtomicU64::new(0);
++    /// `Elem::pow` calls (`inv` is `pow(P - 2)` and lands here too).
++    pub static POW_CALLS: AtomicU64 = AtomicU64::new(0);
++    /// `Elem` multiplications spent inside `pow`; depends on the exponent bits.
++    pub static POW_MUL: AtomicU64 = AtomicU64::new(0);
++    /// `Elem::inv` calls.
++    pub static INV_CALLS: AtomicU64 = AtomicU64::new(0);
++
++    #[inline(always)]
++    pub(crate) fn bump(c: &AtomicU64) {
++        c.fetch_add(1, Relaxed);
++    }
++}
++
+ impl ops::Add for Elem {
+     type Output = Self;
+ 
+     /// Addition for Baby Bear [Elem]
+     fn add(self, rhs: Self) -> Self {
++        counters::bump(&counters::ADD);
+         Elem(add(self.ensure_valid().0, rhs.ensure_valid().0))
+     }
+ }
+@@ -234,6 +260,7 @@
+ impl ops::AddAssign for Elem {
+     /// Simple addition case for Baby Bear [Elem]
+     fn add_assign(&mut self, rhs: Self) {
++        counters::bump(&counters::ADD);
+         self.0 = add(self.ensure_valid().0, rhs.ensure_valid().0)
+     }
+ }
+@@ -243,6 +270,7 @@
+ 
+     /// Subtraction for Baby Bear [Elem]
+     fn sub(self, rhs: Self) -> Self {
++        counters::bump(&counters::SUB);
+         Elem(sub(self.ensure_valid().0, rhs.ensure_valid().0))
+     }
+ }
+@@ -250,6 +278,7 @@
+ impl ops::SubAssign for Elem {
+     /// Simple subtraction case for Baby Bear [Elem]
+     fn sub_assign(&mut self, rhs: Self) {
++        counters::bump(&counters::SUB);
+         self.0 = sub(self.ensure_valid().0, rhs.ensure_valid().0)
+     }
+ }
+@@ -259,6 +288,7 @@
+ 
+     /// Multiplication for Baby Bear [Elem]
+     fn mul(self, rhs: Self) -> Self {
++        counters::bump(&counters::MUL);
+         Elem(mul(self.ensure_valid().0, rhs.ensure_valid().0))
+     }
+ }
+@@ -266,6 +296,7 @@
+ impl ops::MulAssign for Elem {
+     /// Simple multiplication case for Baby Bear [Elem]
+     fn mul_assign(&mut self, rhs: Self) {
++        counters::bump(&counters::MUL);
+         self.0 = mul(self.ensure_valid().0, rhs.ensure_valid().0)
+     }
+ }
+--- a/src/field/mod.rs
++++ b/src/field/mod.rs
+@@ -78,6 +78,10 @@
+ 
+     /// Return an element raised to the given power.
+     fn pow(self, exp: usize) -> Self {
++        use baby_bear::counters::{self, MUL, POW_CALLS, POW_MUL};
++        use core::sync::atomic::Ordering::Relaxed;
++        counters::bump(&POW_CALLS);
++        let mul_before = MUL.load(Relaxed);
+         debug_assert!(self.is_valid());
+         let mut n = exp;
+         let mut tot = Self::ONE;
+@@ -89,6 +93,7 @@
+             n /= 2;
+             x *= x;
+         }
++        POW_MUL.fetch_add(MUL.load(Relaxed) - mul_before, Relaxed);
+         tot
+     }
+ 

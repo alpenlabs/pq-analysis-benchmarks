@@ -1142,6 +1142,7 @@ dependencies = [
  "anyhow",
  "bincode",
  "methods",
+ "risc0-core",
  "risc0-zkp",
  "risc0-zkvm",
  "serde",
@@ -2315,8 +2316,6 @@ dependencies = [
 [[package]]
 name = "risc0-core"
 version = "3.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6eb2d2b2c6cac0e43cbb2202daacee1a2f24d0dfa03fd08887a11dc6defdcc1"
 dependencies = [
  "bytemuck",
  "rand_core 0.9.5",

@@ -1,3 +1,3 @@
 [codespell]
-skip = .git,target,Cargo.lock,*.bin,*.leaf.json,./stwo/leaf/leaf_simple_bootloader_compiled.json
+skip = .git,target,patched,Cargo.lock,*.bin,*.leaf.json,./stwo/leaf/leaf_simple_bootloader_compiled.json
 ignore-words-list = crate,ser

@@ -1,2 +1,3 @@
 target/
 count-*.json
+risc0/patched/

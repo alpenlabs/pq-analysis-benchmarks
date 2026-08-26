@@ -38,6 +38,9 @@ jobs:
           cache-on-failure: true
           workspaces: risc0
 
+      - name: Apply risc0-core patch
+        run: ./risc0/patch.sh
+
       - name: size
         working-directory: risc0
         run: |
@@ -51,7 +54,7 @@ jobs:
         run: |
           for g in trivial fib journal; do
             cargo run --release --locked -p host -- count "$g" "count-$g.json"
-            diff "count-$g.json" ../results/risc0/hash.json
+            diff "count-$g.json" ../results/risc0/ops.json
           done
       
   sp1:

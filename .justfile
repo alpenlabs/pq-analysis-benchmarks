@@ -10,6 +10,7 @@ default:
 each +args:
     #!/usr/bin/env bash
     set -euo pipefail
+    [ -d risc0/patched/risc0-core ] || ./risc0/patch.sh
     for ws in {{workspaces}}; do
         echo "== $ws"
         (cd "$ws" && RISC0_SKIP_BUILD=1 SP1_SKIP_PROGRAM_BUILD=true cargo {{args}})
@@ -72,14 +73,14 @@ lint-fix: fmt-toml fmt-ws lint-fix-ws lint-fix-codespell
 
 # Re-derive the committed results from the committed artifacts (what CI runs)
 [group('check')]
-check:
+check: patch-risc0
     #!/usr/bin/env bash
     set -euo pipefail
     cd risc0
     for g in trivial fib journal; do
         RISC0_SKIP_BUILD=1 cargo run --release --locked -p host -- size "$g"
         RISC0_SKIP_BUILD=1 cargo run --release --locked -p host -- count "$g" "count-$g.json"
-        diff "count-$g.json" ../results/risc0/hash.json
+        diff "count-$g.json" ../results/risc0/ops.json
     done
     cd ../sp1
     for g in trivial fib journal; do
@@ -91,9 +92,14 @@ check:
         RUST_MIN_STACK=8388608 cargo run --release --locked -- size "$g.leaf"
     done
 
+# Fetch risc0-core and apply patches/risc0-core-3.0.2.patch into risc0/patched/
+[group('prerequisites')]
+patch-risc0:
+    ./risc0/patch.sh
+
 # Prove the Risc0 guests and write artifacts/risc0/<guest>.bin (needs r0vm)
 [group('prove')]
-prove-risc0:
+prove-risc0: patch-risc0
     #!/usr/bin/env bash
     set -euo pipefail
     cd risc0
