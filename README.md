@@ -11,7 +11,9 @@ Instrumentation of third-party crates is kept as patch files
 (`<workspace>/patches/`) and applied by `<workspace>/patch.sh` to the
 unmodified crates.io sources, which Cargo then uses via `[patch.crates-io]`.
 `just check` re-derives everything under `results/` from the committed
-artifacts.
+artifacts. `results/<system>/ops.json` is the operation ledger of one
+verification; `gates.py` converts the three ledgers to a Boolean-gate
+estimate (`results/gates.json`).
 
 ## Risc0
 
@@ -142,3 +144,45 @@ check), the `triple_xor` finalization and the `m31_to_u32` re-encoding at
 the hash boundary. Unlike the Risc0 and SP1 ledgers, which count native
 base-field operations of the shipped verifier code, this one counts gates
 over the degree-4 extension; the gate estimate accounts for that.
+
+## Gate estimate
+
+```sh
+python3 gates.py    # writes results/gates.json and prints the table
+```
+
+Costs are nonfree gates under free-XOR from the alpenlabs/g16 gate-count
+instrumentation, listed with their provenance in `gates.py`. Each cost has a
+basis: measured (a complete gadget, validated against the crate's native
+arithmetic: BLAKE3 10,848 and BLAKE2s 15,360 per compression, BabyBear and
+KoalaBear multiplication 2,091 and 2,190, their addition 128), priced
+(assembled from measured primitives without validating the composite: M31
+multiplication 1,888, M31 addition 31, a floor), or assumed (no measurement:
+BabyBear and KoalaBear subtraction taken equal to addition). Stwo's QM31
+gates are expanded to M31 operations by an assumed Karatsuba gadget (9
+multiplications and 29 additions per QM31 multiplication); stwo's own code
+is schoolbook at both levels (20 and 14), and both expansions are recorded
+in `results/gates.json`. The table reports, per row, the share of the total
+that rests on non-measured costs: 0.02% for Risc0 and 0.37% for SP1 (the
+subtraction price), about 96% for Stwo (all of its field arithmetic).
+
+Each system is totalled under its deployed hash and under each of four
+hashes (BLAKE3, BLAKE2s, and the Poseidon2 instances Risc0 and SP1 ship:
+width 24 over BabyBear with `x^7`, width 16 over KoalaBear with `x^3`),
+replacing each hash unit (permutation or compression) one-for-one and
+keeping the field arithmetic. "As deployed" prices Risc0's and SP1's
+Poseidon2 from the permutations' own field arithmetic in `in_hash_suite`
+and Stwo's BLAKE2s from its compressions; a system's own hash reproduces
+that total. The one-to-one mapping is exact for Merkle nodes and
+approximate for sponge absorbs and Fiat-Shamir, and other than the deployed
+hash it assumes a fork of prover and verifier. There is no measured
+Poseidon2 gadget: its per-permutation cost is the counted operations priced
+with the measured per-operation gadgets, and `gates.py` records the
+permutation's composition and a bracket around it. Of Risc0's 1,572
+multiplications per permutation, 852 are the S-box and 720 are by
+constants (504 arbitrary, 216 by 2 or 4), which a Boolean gadget does with
+shifts and adds, so the figure is an upper end; SP1's 296 are all S-box,
+and its internal linear layer is shifts and sums the counters do not see,
+so its figure is about 10% under the bracket. Equality checks, permutation
+networks, witness wires and field-to-word re-encodings are counted in the
+ledgers but not priced.

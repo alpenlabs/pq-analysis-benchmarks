@@ -145,11 +145,26 @@ jobs:
             diff "count-$g.json" ../results/stwo/ops.json
           done
 
+  gates:
+    name: Gate estimate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: gates
+        run: |
+          python3 gates.py gates.json
+          diff gates.json results/gates.json
+
   check-success:
     name: Check that checks passed
     runs-on: ubuntu-latest
     if: always()
-    needs: [risc0, sp1, stwo]
+    needs: [risc0, sp1, stwo, gates]
     timeout-minutes: 30
     steps:
       - name: Decide whether the needed jobs succeeded or failed

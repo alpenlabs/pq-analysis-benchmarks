@@ -1,0 +1,250 @@
+{
+  "costs": {
+    "blake3_compression": {
+      "nonfree": 10848,
+      "basis": "measured",
+      "note": "g16ckt blake3_hash gadget, 64-byte block: 10,752 AND + 96 OR"
+    },
+    "blake2s_compression": {
+      "nonfree": 15360,
+      "basis": "measured",
+      "note": "BLAKE2s-256 from the same u32 primitives, digests validated: 10 rounds x 8 G x 6 adds x 32 AND"
+    },
+    "babybear": {
+      "mul": {
+        "nonfree": 2091,
+        "basis": "measured",
+        "note": "Montgomery multiply, validated against risc0-core baby_bear::mul"
+      },
+      "add": {
+        "nonfree": 128,
+        "basis": "measured",
+        "note": "modular add"
+      },
+      "sub": {
+        "nonfree": 128,
+        "basis": "assumed",
+        "note": "taken equal to add; not measured"
+      }
+    },
+    "koalabear": {
+      "mul": {
+        "nonfree": 2190,
+        "basis": "measured",
+        "note": "Montgomery multiply, validated against p3-koala-bear monty_reduce"
+      },
+      "add": {
+        "nonfree": 128,
+        "basis": "measured",
+        "note": "modular add"
+      },
+      "sub": {
+        "nonfree": 128,
+        "basis": "assumed",
+        "note": "taken equal to add; not measured"
+      }
+    },
+    "m31": {
+      "mul": {
+        "nonfree": 1888,
+        "basis": "priced",
+        "note": "measured 31x31 Karatsuba multiplier (1,702) + Mersenne reduction priced from measured primitives (two 31-bit adds, sub, select = 186); composite not validated"
+      },
+      "add": {
+        "nonfree": 31,
+        "basis": "priced",
+        "note": "31-bit adder; stwo's partial_reduce conditional subtract not included, so a floor"
+      },
+      "sub": {
+        "nonfree": 31,
+        "basis": "priced",
+        "note": "as add"
+      }
+    }
+  },
+  "qm31_in_m31_ops": {
+    "basis": "assumed",
+    "used": "karatsuba",
+    "karatsuba": {
+      "mul": {
+        "mul": 9,
+        "add": 29
+      },
+      "pointwise_mul": {
+        "mul": 4,
+        "add": 0
+      },
+      "add": {
+        "mul": 0,
+        "add": 4
+      },
+      "sub": {
+        "mul": 0,
+        "add": 4
+      }
+    },
+    "schoolbook_as_in_stwo": {
+      "mul": {
+        "mul": 20,
+        "add": 14
+      },
+      "pointwise_mul": {
+        "mul": 4,
+        "add": 0
+      },
+      "add": {
+        "mul": 0,
+        "add": 4
+      },
+      "sub": {
+        "mul": 0,
+        "add": 4
+      }
+    }
+  },
+  "poseidon2": {
+    "risc0": {
+      "width": 24,
+      "sbox": 7,
+      "rounds_full": 8,
+      "rounds_partial": 21,
+      "general": 852,
+      "const_arbitrary": 504,
+      "const_pow2": 216,
+      "add": 2301,
+      "sub": 0,
+      "uncounted_add_equiv": 0
+    },
+    "sp1": {
+      "width": 16,
+      "sbox": 3,
+      "rounds_full": 8,
+      "rounds_partial": 20,
+      "general": 296,
+      "const_arbitrary": 0,
+      "const_pow2": 0,
+      "add": 832,
+      "sub": 20,
+      "uncounted_add_equiv": 640
+    }
+  },
+  "hash_per_unit": {
+    "blake3": {
+      "per_unit": 10848,
+      "basis": "measured"
+    },
+    "blake2s": {
+      "per_unit": 15360,
+      "basis": "measured"
+    },
+    "poseidon2-babybear-w24": {
+      "per_unit": 3581580,
+      "basis": "priced"
+    },
+    "poseidon2-koalabear-w16": {
+      "per_unit": 757296,
+      "basis": "priced"
+    }
+  },
+  "systems": [
+    {
+      "system": "risc0",
+      "hash": "poseidon2-babybear",
+      "hash_units": 5693,
+      "residual_field": 1423360697,
+      "hash_as_deployed": 20389947228,
+      "total_as_deployed": 21813307925,
+      "total_with": {
+        "blake3": 1485118361,
+        "blake2s": 1510805177,
+        "poseidon2-babybear-w24": 21813295637,
+        "poseidon2-koalabear-w16": 5734646825
+      },
+      "unmeasured_as_deployed": 4050432,
+      "unmeasured_residual": 4050432,
+      "basis_note": "subtraction priced as addition (assumed); everything else measured per field operation; the hash column is an upper bound, see poseidon2",
+      "poseidon2": {
+        "composition": {
+          "width": 24,
+          "sbox": 7,
+          "rounds_full": 8,
+          "rounds_partial": 21,
+          "general": 852,
+          "const_arbitrary": 504,
+          "const_pow2": 216,
+          "add": 2301,
+          "sub": 0,
+          "uncounted_add_equiv": 0
+        },
+        "per_permutation": {
+          "counted_as_general": 3581580,
+          "upper": 3581580,
+          "lower": 3157572,
+          "floor": 2168220
+        },
+        "basis": "assumed",
+        "note": "no measured Poseidon2 gadget; counted_as_general is used in the table; upper/lower/floor include uncounted linear-layer work and price constant multiplications as general multiplies, power-of-two ones as adds, or all as adds"
+      }
+    },
+    {
+      "system": "sp1",
+      "hash": "poseidon2-koalabear",
+      "hash_units": 39589,
+      "residual_field": 3848612756,
+      "hash_as_deployed": 29980591344,
+      "total_as_deployed": 33829204100,
+      "total_with": {
+        "blake3": 4278074228,
+        "blake2s": 4456699796,
+        "poseidon2-babybear-w24": 145639783376,
+        "poseidon2-koalabear-w16": 33829204100
+      },
+      "unmeasured_as_deployed": 123892736,
+      "unmeasured_residual": 22544896,
+      "basis_note": "subtraction priced as addition (assumed); everything else measured per field operation; the hash column is an upper bound, see poseidon2",
+      "poseidon2": {
+        "composition": {
+          "width": 16,
+          "sbox": 3,
+          "rounds_full": 8,
+          "rounds_partial": 20,
+          "general": 296,
+          "const_arbitrary": 0,
+          "const_pow2": 0,
+          "add": 832,
+          "sub": 20,
+          "uncounted_add_equiv": 640
+        },
+        "per_permutation": {
+          "counted_as_general": 757296,
+          "upper": 839216,
+          "lower": 839216,
+          "floor": 839216
+        },
+        "basis": "assumed",
+        "note": "no measured Poseidon2 gadget; counted_as_general is used in the table; upper/lower/floor include uncounted linear-layer work and price constant multiplications as general multiplies, power-of-two ones as adds, or all as adds"
+      }
+    },
+    {
+      "system": "stwo",
+      "hash": "blake2s",
+      "hash_units": 15332,
+      "m31_ops": {
+        "mul": 2721542,
+        "add": 9512686
+      },
+      "residual_field": 5433164562,
+      "hash_as_deployed": 235499520,
+      "total_as_deployed": 5668664082,
+      "total_with": {
+        "blake3": 5599486098,
+        "blake2s": 5668664082,
+        "poseidon2-babybear-w24": 60345949122,
+        "poseidon2-koalabear-w16": 17044026834
+      },
+      "unmeasured_as_deployed": 5433164562,
+      "unmeasured_residual": 5433164562,
+      "basis_note": "QM31 gates expanded to M31 operations by an assumed Karatsuba gadget; M31 costs priced, not measured; hashes measured"
+    }
+  ]
+}

@@ -95,6 +95,9 @@ check: patch-risc0 patch-sp1
         RUST_MIN_STACK=8388608 cargo run --release --locked -- count "$g" "count-$g.json"
         diff "count-$g.json" ../results/stwo/ops.json
     done
+    cd ..
+    python3 gates.py gates.json
+    diff gates.json results/gates.json
 
 # Fetch risc0-core and apply patches/risc0-core-3.0.2.patch into risc0/patched/
 [group('prerequisites')]
