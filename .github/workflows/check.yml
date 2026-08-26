@@ -1,0 +1,56 @@
+# Re-derives the committed results from the committed artifacts. Proving is
+# not run here: it needs the zkVM prover toolchains.
+
+name: check
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RISC0_SKIP_BUILD: 1
+
+permissions: {}
+
+jobs:
+  risc0:
+    name: Risc0 receipt
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2
+        with:
+          cache-on-failure: true
+          workspaces: risc0
+
+      - name: size
+        working-directory: risc0
+        run: |
+          cargo run --release --locked -p host -- size | tee size.txt
+          grep -q '^  222668  seal (u32 words \* 4)$' size.txt
+
+  check-success:
+    name: Check that checks passed
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [risc0]
+    timeout-minutes: 30
+    steps:
+      - name: Decide whether the needed jobs succeeded or failed
+        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}

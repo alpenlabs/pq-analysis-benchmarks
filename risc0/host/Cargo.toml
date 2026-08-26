@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 # No `prove` feature: proving uses the installed r0vm binary.
-risc0-zkvm = { workspace = true }
-methods = { workspace = true }
 anyhow = "1"
 bincode = "1.3"
+methods = { workspace = true }
+risc0-zkvm = { workspace = true }
 serde = "1"
