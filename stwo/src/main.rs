@@ -7,7 +7,9 @@
 //! the leaf circuit proof to `artifacts/stwo/<guest>.leaf.json`.
 //! `count <guest> [out]`: verify the leaf proof and write the verification circuit's gate
 //!                  counts as JSON (default `results/stwo/ops.json`; same for every guest).
-//! `size <guest>.leaf`: report and verify that leaf circuit proof.
+//! `size <guest>.leaf [out]`: report and verify that leaf circuit proof; write its size
+//!                  without public inputs as JSON (default `results/stwo/size.json`; same
+//!                  for every guest).
 //!
 //! Guests: trivial, fib, journal.
 
@@ -147,8 +149,29 @@ fn verify_leaf(name: &str) -> Result<FinalizedContext<QM31>> {
     Ok(context)
 }
 
-fn size_leaf(name: &str) -> Result<()> {
-    verify_leaf(name).map(drop)
+#[derive(Serialize)]
+struct Size {
+    /// Bytes a verifier needs beyond the public inputs: the serialized leaf
+    /// circuit proof. Excludes the output preimage.
+    proof_bytes: usize,
+    components: std::collections::BTreeMap<&'static str, usize>,
+}
+
+fn size_leaf(name: &str, out: &str) -> Result<()> {
+    verify_leaf(name)?;
+    let leaf: LeafInput = serde_json::from_str(&std::fs::read_to_string(leaf_path(name))?)?;
+    let components =
+        std::collections::BTreeMap::from([("leaf_circuit_proof", leaf.proof.proof.len())]);
+    let size = Size {
+        proof_bytes: components.values().sum(),
+        components,
+    };
+    std::fs::write(out, format!("{}\n", serde_json::to_string_pretty(&size)?))?;
+    println!(
+        "{:>8}  proof without public inputs (written to {out})",
+        size.proof_bytes
+    );
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -339,7 +362,11 @@ fn main() -> Result<()> {
     ) {
         (Some("prove"), Some(g)) => prove(g),
         (Some("size"), Some(g)) => match g.strip_suffix(".leaf") {
-            Some(inner) => size_leaf(inner),
+            Some(inner) => size_leaf(
+                inner,
+                args.get(3)
+                    .map_or("../results/stwo/size.json", String::as_str),
+            ),
             None => size(g),
         },
         (Some("wrap"), Some(g)) => wrap(g),

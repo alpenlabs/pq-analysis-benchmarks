@@ -1,5 +1,5 @@
 # Rust workspaces in this repository; extend as sp1/ and stwo/ are added.
-workspaces := "risc0 sp1 stwo"
+workspaces := "risc0 sp1 stwo gadgets"
 
 # Show available commands
 default:
@@ -78,26 +78,37 @@ check: patch-risc0 patch-sp1
     set -euo pipefail
     cd risc0
     for g in trivial fib journal; do
-        RISC0_SKIP_BUILD=1 cargo run --release --locked -p host -- size "$g"
+        RISC0_SKIP_BUILD=1 cargo run --release --locked -p host -- size "$g" "size-$g.json"
+        diff "size-$g.json" ../results/risc0/size.json
         RISC0_SKIP_BUILD=1 cargo run --release --locked -p host -- count "$g" "count-$g.json"
         diff "count-$g.json" ../results/risc0/ops.json
     done
     cd ../sp1
     for g in trivial fib journal; do
-        SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- size "$g"
+        SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- size "$g" "size-$g.json"
+        diff "size-$g.json" ../results/sp1/size.json
         SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- count "$g" "count-$g.json"
         diff "count-$g.json" ../results/sp1/ops.json
     done
     cd ../stwo
     for g in trivial fib journal; do
         RUST_MIN_STACK=8388608 cargo run --release --locked -- size "$g"
-        RUST_MIN_STACK=8388608 cargo run --release --locked -- size "$g.leaf"
+        RUST_MIN_STACK=8388608 cargo run --release --locked -- size "$g.leaf" "size-$g.json"
+        diff "size-$g.json" ../results/stwo/size.json
         RUST_MIN_STACK=8388608 cargo run --release --locked -- count "$g" "count-$g.json"
         diff "count-$g.json" ../results/stwo/ops.json
     done
+    cd ../gadgets
+    cargo run --release --locked -- gadgets.json
+    diff gadgets.json ../results/gadgets.json
     cd ..
-    python3 gates.py gates.json
-    diff gates.json results/gates.json
+    python3 gates.py
+    git diff --exit-code results/gates.json README.md
+
+# Measure the Boolean gate costs with g16ckt and write results/gadgets.json
+[group('check')]
+gadgets:
+    cd gadgets && cargo run --release --locked
 
 # Fetch risc0-core and apply patches/risc0-core-3.0.2.patch into risc0/patched/
 [group('prerequisites')]

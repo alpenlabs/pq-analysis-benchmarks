@@ -45,8 +45,9 @@ jobs:
         working-directory: risc0
         run: |
           for g in trivial fib journal; do
-            cargo run --release --locked -p host -- size "$g" | tee "size-$g.txt"
+            cargo run --release --locked -p host -- size "$g" "size-$g.json" | tee "size-$g.txt"
             grep -q '^  222668  seal (u32 words \* 4)$' "size-$g.txt"
+            diff "size-$g.json" ../results/risc0/size.json
           done
 
       - name: count
@@ -85,8 +86,9 @@ jobs:
         working-directory: sp1
         run: |
           for g in trivial fib journal; do
-            cargo run --release --locked -- size "$g" | tee "size-$g.txt"
+            cargo run --release --locked -- size "$g" "size-$g.json" | tee "size-$g.txt"
             grep -q '^ 1272546  proof total (incl. enum tag)$' "size-$g.txt"
+            diff "size-$g.json" ../results/sp1/size.json
           done
 
       - name: count
@@ -130,9 +132,10 @@ jobs:
           grep -q '^  616528  intrinsic total (size_estimate)$' size-fib.txt
           grep -q '^  579224  intrinsic total (size_estimate)$' size-journal.txt
           for g in trivial fib journal; do
-            cargo run --release --locked -- size "$g.leaf" | tee "size-$g-leaf.txt"
+            cargo run --release --locked -- size "$g.leaf" "size-$g.json" | tee "size-$g-leaf.txt"
             grep -q '^verified$' "size-$g-leaf.txt"
             grep -q '^  545896  leaf circuit proof (serialized)$' "size-$g-leaf.txt"
+            diff "size-$g.json" ../results/stwo/size.json
           done
 
       - name: count
@@ -144,6 +147,32 @@ jobs:
             cargo run --release --locked -- count "$g" "count-$g.json"
             diff "count-$g.json" ../results/stwo/ops.json
           done
+
+  gadgets:
+    name: Gate costs (g16ckt)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        working-directory: gadgets
+        run: rustup show active-toolchain
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2
+        with:
+          cache-on-failure: true
+          workspaces: gadgets
+
+      - name: gadgets
+        working-directory: gadgets
+        run: |
+          cargo run --release --locked -- gadgets.json
+          diff gadgets.json ../results/gadgets.json
 
   gates:
     name: Gate estimate
@@ -157,14 +186,14 @@ jobs:
 
       - name: gates
         run: |
-          python3 gates.py gates.json
-          diff gates.json results/gates.json
+          python3 gates.py
+          git diff --exit-code results/gates.json README.md
 
   check-success:
     name: Check that checks passed
     runs-on: ubuntu-latest
     if: always()
-    needs: [risc0, sp1, stwo, gates]
+    needs: [risc0, sp1, stwo, gadgets, gates]
     timeout-minutes: 30
     steps:
       - name: Decide whether the needed jobs succeeded or failed

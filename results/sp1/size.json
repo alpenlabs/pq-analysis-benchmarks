@@ -1,0 +1,8 @@
+{
+  "proof_bytes": 1271786,
+  "components": {
+    "recursion_vk": 104,
+    "shard_proof_without_public_values": 1271090,
+    "vk_merkle_proof": 592
+  }
+}

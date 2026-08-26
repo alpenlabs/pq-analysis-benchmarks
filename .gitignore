@@ -2,4 +2,5 @@ target/
 count-*.json
 risc0/patched/
 sp1/patched/
-/gates.json
+size-*.json
+gadgets.json

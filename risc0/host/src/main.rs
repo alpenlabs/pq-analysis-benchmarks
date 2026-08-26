@@ -1,5 +1,7 @@
 //! `prove <guest>`: run the guest and write a succinct receipt to `artifacts/risc0/<guest>.bin`.
-//! `size <guest>`:  read that receipt and report its serialized size per component.
+//! `size <guest> [out]`: read that receipt and report its serialized size per component;
+//!                  write the proof size without public inputs as JSON (default
+//!                  `results/risc0/size.json`; it is the same for every guest).
 //! `count <guest> [out]`: verify that receipt with a counting hash suite and
 //!                  patched field arithmetic, and write the operation ledger as
 //!                  JSON (default `results/risc0/ops.json`; it is the same for
@@ -43,7 +45,16 @@ fn len<T: Serialize>(v: &T) -> Result<usize> {
     Ok(bincode::serialized_size(v)? as usize)
 }
 
-fn size(name: &str) -> Result<()> {
+#[derive(Serialize)]
+struct Size {
+    /// Bytes a verifier needs beyond the public inputs: the seal, the
+    /// control ID and its inclusion proof. Excludes claim, hashfn,
+    /// verifier_parameters, journal and metadata.
+    proof_bytes: usize,
+    components: std::collections::BTreeMap<&'static str, usize>,
+}
+
+fn size(name: &str, out: &str) -> Result<()> {
     let bytes = std::fs::read(receipt_path(name))?;
     let receipt: Receipt = bincode::deserialize(&bytes)?;
     // Image IDs are placeholders under RISC0_SKIP_BUILD, so verify the seal only.
@@ -73,6 +84,20 @@ fn size(name: &str) -> Result<()> {
     for (name, n) in rows {
         println!("{n:>8}  {name}");
     }
+    let components = std::collections::BTreeMap::from([
+        ("seal", s.seal.len() * 4),
+        ("control_id", len(&s.control_id)?),
+        ("control_inclusion_proof", len(&s.control_inclusion_proof)?),
+    ]);
+    let size = Size {
+        proof_bytes: components.values().sum(),
+        components,
+    };
+    std::fs::write(out, format!("{}\n", serde_json::to_string_pretty(&size)?))?;
+    println!(
+        "{:>8}  proof without public inputs (written to {out})",
+        size.proof_bytes
+    );
     Ok(())
 }
 
@@ -135,7 +160,11 @@ fn main() -> Result<()> {
         args.get(2).map(String::as_str),
     ) {
         (Some("prove"), Some(g)) => prove(g),
-        (Some("size"), Some(g)) => size(g),
+        (Some("size"), Some(g)) => size(
+            g,
+            args.get(3)
+                .map_or("../results/risc0/size.json", String::as_str),
+        ),
         (Some("count"), Some(g)) => count(
             g,
             args.get(3)

@@ -1,64 +1,91 @@
 {
+  "gadgets_source": {
+    "crate": "g16ckt",
+    "repository": "https://github.com/alpenlabs/g16",
+    "rev": "f78c01da1ec9138b6c3a1c872405c1eefbaca48e"
+  },
   "costs": {
     "blake3_compression": {
       "nonfree": 10848,
+      "xor": 50688,
       "basis": "measured",
-      "note": "g16ckt blake3_hash gadget, 64-byte block: 10,752 AND + 96 OR"
+      "note": "g16ckt's BLAKE3 gadget, one 64-byte block",
+      "gadget": "blake3_compression_64b"
     },
     "blake2s_compression": {
       "nonfree": 15360,
+      "xor": 72192,
       "basis": "measured",
-      "note": "BLAKE2s-256 from the same u32 primitives, digests validated: 10 rounds x 8 G x 6 adds x 32 AND"
+      "note": "BLAKE2s-256 from the same u32 primitives, one 64-byte block",
+      "gadget": "blake2s_compression_64b"
     },
     "babybear": {
       "mul": {
         "nonfree": 2091,
+        "xor": 4837,
         "basis": "measured",
-        "note": "Montgomery multiply, validated against risc0-core baby_bear::mul"
+        "note": "Montgomery multiply (REDC), as risc0-core",
+        "gadget": "babybear_mul"
       },
       "add": {
         "nonfree": 128,
+        "xor": 375,
         "basis": "measured",
-        "note": "modular add"
+        "note": "add, conditional subtract of p",
+        "gadget": "babybear_add"
       },
       "sub": {
-        "nonfree": 128,
-        "basis": "assumed",
-        "note": "taken equal to add; not measured"
+        "nonfree": 96,
+        "xor": 250,
+        "basis": "measured",
+        "note": "subtract, conditional add of p",
+        "gadget": "babybear_sub"
       }
     },
     "koalabear": {
       "mul": {
         "nonfree": 2190,
+        "xor": 5224,
         "basis": "measured",
-        "note": "Montgomery multiply, validated against p3-koala-bear monty_reduce"
+        "note": "Montgomery multiply (REDC), as p3-koala-bear",
+        "gadget": "koalabear_mul"
       },
       "add": {
         "nonfree": 128,
+        "xor": 375,
         "basis": "measured",
-        "note": "modular add"
+        "note": "add, conditional subtract of p",
+        "gadget": "koalabear_add"
       },
       "sub": {
-        "nonfree": 128,
-        "basis": "assumed",
-        "note": "taken equal to add; not measured"
+        "nonfree": 96,
+        "xor": 250,
+        "basis": "measured",
+        "note": "subtract, conditional add of p",
+        "gadget": "koalabear_sub"
       }
     },
     "m31": {
       "mul": {
-        "nonfree": 1888,
-        "basis": "priced",
-        "note": "measured 31x31 Karatsuba multiplier (1,702) + Mersenne reduction priced from measured primitives (two 31-bit adds, sub, select = 186); composite not validated"
+        "nonfree": 1860,
+        "xor": 4058,
+        "basis": "measured",
+        "note": "31x31 Karatsuba product, two Mersenne folds, conditional subtract, as stwo M31::reduce",
+        "gadget": "m31_mul"
       },
       "add": {
-        "nonfree": 31,
-        "basis": "priced",
-        "note": "31-bit adder; stwo's partial_reduce conditional subtract not included, so a floor"
+        "nonfree": 127,
+        "xor": 371,
+        "basis": "measured",
+        "note": "add, conditional subtract of p (stwo partial_reduce)",
+        "gadget": "m31_add"
       },
       "sub": {
-        "nonfree": 31,
-        "basis": "priced",
-        "note": "as add"
+        "nonfree": 160,
+        "xor": 500,
+        "basis": "measured",
+        "note": "a + p - b, conditional subtract of p (stwo partial_reduce)",
+        "gadget": "m31_sub"
       }
     }
   },
@@ -131,38 +158,79 @@
   "hash_per_unit": {
     "blake3": {
       "per_unit": 10848,
+      "xor": 50688,
       "basis": "measured"
     },
     "blake2s": {
       "per_unit": 15360,
+      "xor": 72192,
       "basis": "measured"
     },
     "poseidon2-babybear-w24": {
       "per_unit": 3581580,
+      "xor": 8466639,
       "basis": "priced"
     },
     "poseidon2-koalabear-w16": {
-      "per_unit": 757296,
+      "per_unit": 756656,
+      "xor": 1863304,
       "basis": "priced"
     }
   },
+  "baseline": [
+    {
+      "system": "groth16 (bn254)",
+      "version": "g16ckt@f78c01da",
+      "artifact": "proof, uncompressed",
+      "proof_bytes": 256,
+      "hash": "-",
+      "nonfree": 2758905493,
+      "xor": 7710285369,
+      "total": 10469190862,
+      "gadget": "groth16_bn254_verify_1_input",
+      "basis": "measured"
+    },
+    {
+      "system": "groth16 (bn254)",
+      "version": "g16ckt@f78c01da",
+      "artifact": "proof, compressed",
+      "proof_bytes": 128,
+      "hash": "-",
+      "nonfree": 2955935125,
+      "xor": 8291127626,
+      "total": 11247062751,
+      "gadget": "groth16_bn254_verify_compressed_1_input",
+      "basis": "measured"
+    }
+  ],
   "systems": [
     {
       "system": "risc0",
+      "version": "3.0.5",
+      "artifact": "succinct receipt",
+      "proof_bytes": 222968,
       "hash": "poseidon2-babybear",
       "hash_units": 5693,
-      "residual_field": 1423360697,
+      "residual_field": 1422348089,
+      "residual_field_xor": 3329001919,
       "hash_as_deployed": 20389947228,
-      "total_as_deployed": 21813307925,
+      "hash_as_deployed_xor": 48200611827,
+      "total_as_deployed": 21812295317,
       "total_with": {
-        "blake3": 1485118361,
-        "blake2s": 1510805177,
-        "poseidon2-babybear-w24": 21813295637,
-        "poseidon2-koalabear-w16": 5734646825
+        "blake3": 1484105753,
+        "blake2s": 1509792569,
+        "poseidon2-babybear-w24": 21812283029,
+        "poseidon2-koalabear-w16": 5729990697
       },
-      "unmeasured_as_deployed": 4050432,
-      "unmeasured_residual": 4050432,
-      "basis_note": "subtraction priced as addition (assumed); everything else measured per field operation; the hash column is an upper bound, see poseidon2",
+      "total_with_xor": {
+        "blake3": 3617568703,
+        "blake2s": 3739990975,
+        "poseidon2-babybear-w24": 51529577746,
+        "poseidon2-koalabear-w16": 13936791591
+      },
+      "unmeasured_as_deployed": 0,
+      "unmeasured_residual": 0,
+      "basis_note": "field operations priced with measured gadgets; the deployed-hash column prices the permutation's counted operations, see poseidon2",
       "poseidon2": {
         "composition": {
           "width": 24,
@@ -188,20 +256,31 @@
     },
     {
       "system": "sp1",
+      "version": "6.3.1",
+      "artifact": "compressed proof",
+      "proof_bytes": 1271786,
       "hash": "poseidon2-koalabear",
       "hash_units": 39589,
-      "residual_field": 3848612756,
-      "hash_as_deployed": 29980591344,
-      "total_as_deployed": 33829204100,
+      "residual_field": 3842976532,
+      "residual_field_xor": 9238683553,
+      "hash_as_deployed": 29955254384,
+      "hash_as_deployed_xor": 73766342056,
+      "total_as_deployed": 33798230916,
       "total_with": {
-        "blake3": 4278074228,
-        "blake2s": 4456699796,
-        "poseidon2-babybear-w24": 145639783376,
-        "poseidon2-koalabear-w16": 33829204100
+        "blake3": 4272438004,
+        "blake2s": 4451063572,
+        "poseidon2-babybear-w24": 145634147152,
+        "poseidon2-koalabear-w16": 33798230916
       },
-      "unmeasured_as_deployed": 123892736,
-      "unmeasured_residual": 22544896,
-      "basis_note": "subtraction priced as addition (assumed); everything else measured per field operation; the hash column is an upper bound, see poseidon2",
+      "total_with_xor": {
+        "blake3": 11245370785,
+        "blake2s": 12096692641,
+        "poseidon2-babybear-w24": 344424454924,
+        "poseidon2-koalabear-w16": 83005025609
+      },
+      "unmeasured_as_deployed": 0,
+      "unmeasured_residual": 0,
+      "basis_note": "field operations priced with measured gadgets; the deployed-hash column prices the permutation's counted operations, see poseidon2",
       "poseidon2": {
         "composition": {
           "width": 16,
@@ -216,10 +295,10 @@
           "uncounted_add_equiv": 640
         },
         "per_permutation": {
-          "counted_as_general": 757296,
-          "upper": 839216,
-          "lower": 839216,
-          "floor": 839216
+          "counted_as_general": 756656,
+          "upper": 838576,
+          "lower": 838576,
+          "floor": 838576
         },
         "basis": "assumed",
         "note": "no measured Poseidon2 gadget; counted_as_general is used in the table; upper/lower/floor include uncounted linear-layer work and price constant multiplications as general multiplies, power-of-two ones as adds, or all as adds"
@@ -227,24 +306,35 @@
     },
     {
       "system": "stwo",
+      "version": "starkware-libs/proving@49f8e037",
+      "artifact": "leaf circuit proof",
+      "proof_bytes": 545896,
       "hash": "blake2s",
       "hash_units": 15332,
       "m31_ops": {
         "mul": 2721542,
         "add": 9512686
       },
-      "residual_field": 5433164562,
+      "residual_field": 6270179242,
+      "residual_field_xor": 14573223942,
       "hash_as_deployed": 235499520,
-      "total_as_deployed": 5668664082,
+      "hash_as_deployed_xor": 1106847744,
+      "total_as_deployed": 6505678762,
       "total_with": {
-        "blake3": 5599486098,
-        "blake2s": 5668664082,
-        "poseidon2-babybear-w24": 60345949122,
-        "poseidon2-koalabear-w16": 17044026834
+        "blake3": 6436500778,
+        "blake2s": 6505678762,
+        "poseidon2-babybear-w24": 61182963802,
+        "poseidon2-koalabear-w16": 17871229034
       },
-      "unmeasured_as_deployed": 5433164562,
-      "unmeasured_residual": 5433164562,
-      "basis_note": "QM31 gates expanded to M31 operations by an assumed Karatsuba gadget; M31 costs priced, not measured; hashes measured"
+      "total_with_xor": {
+        "blake3": 15350372358,
+        "blake2s": 15680071686,
+        "poseidon2-babybear-w24": 144383733090,
+        "poseidon2-koalabear-w16": 43141400870
+      },
+      "unmeasured_as_deployed": 6270179242,
+      "unmeasured_residual": 6270179242,
+      "basis_note": "QM31 gates expanded to M31 operations by an assumed Karatsuba layout (see qm31_in_m31_ops); M31 and hash gadgets measured"
     }
   ]
 }

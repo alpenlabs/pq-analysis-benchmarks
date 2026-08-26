@@ -1,6 +1,8 @@
 //! `prove <guest>`: run the guest and write a compressed proof and verifying key to
 //! `artifacts/sp1/<guest>.{bin,vk}`.
-//! `size <guest>`:  read them back and report the serialized size per component.
+//! `size <guest> [out]`: read them back and report the serialized size per component;
+//!                  write the proof size without public inputs as JSON (default
+//!                  `results/sp1/size.json`; it is the same for every guest).
 //! `count <guest> [out]`: verify the proof with the patched Plonky3 crates and
 //!                  write the operation ledger as JSON (default
 //!                  `results/sp1/ops.json`; it is the same for every guest).
@@ -62,7 +64,16 @@ fn len<T: Serialize>(v: &T) -> Result<usize> {
     Ok(bincode::serialized_size(v)? as usize)
 }
 
-fn size(name: &str) -> Result<()> {
+#[derive(Serialize)]
+struct Size {
+    /// Bytes a verifier needs beyond the public inputs: the shard proof
+    /// without its public values, the recursion vk and its Merkle proof.
+    /// Excludes public_values, sp1_version and tee_proof.
+    proof_bytes: usize,
+    components: std::collections::BTreeMap<&'static str, usize>,
+}
+
+fn size(name: &str, out: &str) -> Result<()> {
     let (proof_path, vk_path) = paths(name);
     let proof = SP1ProofWithPublicValues::load(&proof_path)?;
     let vk: SP1VerifyingKey = bincode::deserialize(&std::fs::read(&vk_path)?)?;
@@ -115,6 +126,23 @@ fn size(name: &str) -> Result<()> {
     for (name, n) in rows {
         println!("{n:>8}  {name}");
     }
+    let components = std::collections::BTreeMap::from([
+        (
+            "shard_proof_without_public_values",
+            len(s)? - len(&s.public_values)?,
+        ),
+        ("recursion_vk", len(&p.vk)?),
+        ("vk_merkle_proof", len(&p.vk_merkle_proof)?),
+    ]);
+    let size = Size {
+        proof_bytes: components.values().sum(),
+        components,
+    };
+    std::fs::write(out, format!("{}\n", serde_json::to_string_pretty(&size)?))?;
+    println!(
+        "{:>8}  proof without public inputs (written to {out})",
+        size.proof_bytes
+    );
     Ok(())
 }
 
@@ -270,7 +298,11 @@ fn main() -> Result<()> {
         args.get(2).map(String::as_str),
     ) {
         (Some("prove"), Some(g)) => prove(g),
-        (Some("size"), Some(g)) => size(g),
+        (Some("size"), Some(g)) => size(
+            g,
+            args.get(3)
+                .map_or("../results/sp1/size.json", String::as_str),
+        ),
         (Some("count"), Some(g)) => count(
             g,
             args.get(3)
