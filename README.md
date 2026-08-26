@@ -24,3 +24,18 @@ cargo run --release -p host -- size <guest>    # size breakdown of that receipt
 Guests: `trivial` (commits one `u32`), `fib` (a few million cycles, several
 segments), `journal` (commits 4 KiB). `size` needs only stable Rust and the
 committed receipts.
+
+## SP1
+
+Install the SP1 toolchain (`sp1up`, providing `cargo prove`) following
+https://docs.succinct.xyz/docs/sp1/getting-started/install. Then:
+
+```sh
+cd sp1
+cargo run --release -- prove   # writes artifacts/sp1/trivial.{bin,vk}
+cargo run --release -- size    # size breakdown of that proof
+```
+
+Proving runs the CPU prover in-process. `size` needs only stable Rust and
+the committed artifacts (build with `SP1_SKIP_PROGRAM_BUILD=true` to skip
+the guest build).

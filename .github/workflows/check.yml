@@ -12,6 +12,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RISC0_SKIP_BUILD: 1
+  SP1_SKIP_PROGRAM_BUILD: true
 
 permissions: {}
 
@@ -45,11 +46,38 @@ jobs:
             grep -q '^  222668  seal (u32 words \* 4)$' "size-$g.txt"
           done
 
+  sp1:
+    name: SP1 compressed proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2
+        with:
+          cache-on-failure: true
+          workspaces: sp1
+
+      - name: size
+        working-directory: sp1
+        run: |
+          cargo run --release --locked -- size | tee size.txt
+          grep -q '^ 1272573  file total$' size.txt
+
   check-success:
     name: Check that checks passed
     runs-on: ubuntu-latest
     if: always()
-    needs: [risc0]
+    needs: [risc0, sp1]
     timeout-minutes: 30
     steps:
       - name: Decide whether the needed jobs succeeded or failed

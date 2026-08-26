@@ -1,5 +1,5 @@
 # Rust workspaces in this repository; extend as sp1/ and stwo/ are added.
-workspaces := "risc0"
+workspaces := "risc0 sp1"
 
 # Show available commands
 default:
@@ -12,7 +12,7 @@ each +args:
     set -euo pipefail
     for ws in {{workspaces}}; do
         echo "== $ws"
-        (cd "$ws" && RISC0_SKIP_BUILD=1 cargo {{args}})
+        (cd "$ws" && RISC0_SKIP_BUILD=1 SP1_SKIP_PROGRAM_BUILD=true cargo {{args}})
     done
 
 # Check formatting
@@ -79,6 +79,8 @@ check:
     for g in trivial fib journal; do
         RISC0_SKIP_BUILD=1 cargo run --release --locked -p host -- size "$g"
     done
+    cd ../sp1
+    SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- size
 
 # Prove the Risc0 guests and write artifacts/risc0/<guest>.bin (needs r0vm)
 [group('prove')]
@@ -89,6 +91,11 @@ prove-risc0:
     for g in trivial fib journal; do
         cargo run --release -p host -- prove "$g"
     done
+
+# Prove the SP1 guest and write artifacts/sp1/trivial.{bin,vk} (needs cargo prove)
+[group('prove')]
+prove-sp1:
+    cd sp1 && cargo run --release -- prove
 
 # Check if taplo is installed
 [group('prerequisites')]
