@@ -1,5 +1,5 @@
 # Rust workspaces in this repository; extend as sp1/ and stwo/ are added.
-workspaces := "risc0 sp1"
+workspaces := "risc0 sp1 stwo"
 
 # Show available commands
 default:
@@ -83,6 +83,8 @@ check:
     for g in trivial fib journal; do
         SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- size "$g"
     done
+    cd ../stwo
+    RUST_MIN_STACK=8388608 cargo run --release --locked -- size trivial
 
 # Prove the Risc0 guests and write artifacts/risc0/<guest>.bin (needs r0vm)
 [group('prove')]
@@ -103,6 +105,11 @@ prove-sp1:
     for g in trivial fib journal; do
         cargo run --release -- prove "$g"
     done
+
+# Prove the Stwo guest and write artifacts/stwo/trivial.bin
+[group('prove')]
+prove-stwo:
+    cd stwo && RUST_MIN_STACK=8388608 cargo run --release -- prove trivial
 
 # Check if taplo is installed
 [group('prerequisites')]

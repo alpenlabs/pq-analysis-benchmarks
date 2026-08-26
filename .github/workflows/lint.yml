@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 60
     strategy:
       matrix:
-        workspace: [risc0, sp1]
+        workspace: [risc0, sp1, stwo]
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -28,9 +28,12 @@ jobs:
           persist-credentials: false
 
       - name: Install Rust toolchain
+        working-directory: ${{ matrix.workspace }}
         run: |
-          rustup toolchain install stable --profile minimal --component clippy
+          rustup toolchain install stable --profile minimal
           rustup default stable
+          rustup show active-toolchain
+          rustup component add clippy
 
       - name: Rust cache
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2
@@ -49,7 +52,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix:
-        workspace: [risc0, sp1]
+        workspace: [risc0, sp1, stwo]
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -57,9 +60,12 @@ jobs:
           persist-credentials: false
 
       - name: Install Rust toolchain
+        working-directory: ${{ matrix.workspace }}
         run: |
-          rustup toolchain install stable --profile minimal --component rustfmt
+          rustup toolchain install stable --profile minimal
           rustup default stable
+          rustup show active-toolchain
+          rustup component add rustfmt
 
       - name: cargo fmt check
         run: cargo fmt --all --check

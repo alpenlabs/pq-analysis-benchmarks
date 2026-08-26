@@ -1,0 +1,14 @@
+[package]
+name = "stwo-size"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+cairo-air = { git = "https://github.com/starkware-libs/stwo-cairo", rev = "2b1fb4ded5496fb2db4e8261cd5ee5ef6b710839" }
+cairo-vm = { version = "3.2.0", default-features = false }
+stwo-cairo-dev-utils = { git = "https://github.com/starkware-libs/stwo-cairo", rev = "2b1fb4ded5496fb2db4e8261cd5ee5ef6b710839" }
+stwo-cairo-prover = { git = "https://github.com/starkware-libs/stwo-cairo", rev = "2b1fb4ded5496fb2db4e8261cd5ee5ef6b710839" }
+
+[profile.release]
+lto = true
