@@ -53,8 +53,9 @@ uvx --from cairo-lang==0.14.0.1 cairo-compile --proof_mode \
     programs/<guest>/<guest>.cairo --output programs/<guest>/compiled.json
 ```
 
-The Rust toolchain is pinned by `stwo/rust-toolchain.toml` and installed by
-rustup on first use.
+The prover crates are pinned to a revision of `starkware-libs/proving`, the
+monorepo that superseded `stwo-cairo` in July 2026. The Rust toolchain is
+pinned by `stwo/rust-toolchain.toml` and installed by rustup on first use.
 
 ```sh
 cd stwo
@@ -67,5 +68,18 @@ recursive steps; sized to stay under the 2^20-row limit of the
 `canonical_small` preprocessed trace), `journal` (writes 1,024 values to
 the output). Prover parameters are in `stwo/params.json`
 (`pow_bits` 26, blowup 2, 70 queries, `canonical_small` preprocessed trace).
-Stwo has no recursion wrap, so unlike the other two the proof is one STARK
-over the whole execution.
+The flat proof is one STARK over the whole execution, so its size scales
+with the populated AIR columns. The constant-size artifact is the leaf
+circuit proof of upstream's recursion: the guest runs as a task of the leaf
+bootloader (`stwo/leaf/`), its Cairo proof is verified inside the leaf
+verifier circuit, and that circuit is proved. The circuit is fixed by the
+registry (`stwo/leaf/circuit_registry.json`, the `canonical_small` registry
+with Cairo trace log size 20), so the leaf proof has the same size and circuit
+hash for every guest that fits.
+
+```sh
+RUST_MIN_STACK=8388608 cargo run --release -- wrap <guest>        # writes artifacts/stwo/<guest>.leaf.json
+RUST_MIN_STACK=8388608 cargo run --release -- size <guest>.leaf   # size and verification
+```
+
+`wrap` needs about 30 GB of memory and takes about 20 s per guest.

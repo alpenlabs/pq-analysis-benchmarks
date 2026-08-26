@@ -107,6 +107,11 @@ jobs:
           grep -q '^  546656  intrinsic total (size_estimate)$' size-trivial.txt
           grep -q '^  616528  intrinsic total (size_estimate)$' size-fib.txt
           grep -q '^  579224  intrinsic total (size_estimate)$' size-journal.txt
+          for g in trivial fib journal; do
+            cargo run --release --locked -- size "$g.leaf" | tee "size-$g-leaf.txt"
+            grep -q '^verified$' "size-$g-leaf.txt"
+            grep -q '^  545896  leaf circuit proof (serialized)$' "size-$g-leaf.txt"
+          done
 
   check-success:
     name: Check that checks passed

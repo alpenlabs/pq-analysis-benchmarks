@@ -5,10 +5,22 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1"
-cairo-air = { git = "https://github.com/starkware-libs/stwo-cairo", rev = "2b1fb4ded5496fb2db4e8261cd5ee5ef6b710839" }
+cairo-air = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
 cairo-vm = { version = "3.2.0", default-features = false }
-stwo-cairo-dev-utils = { git = "https://github.com/starkware-libs/stwo-cairo", rev = "2b1fb4ded5496fb2db4e8261cd5ee5ef6b710839" }
-stwo-cairo-prover = { git = "https://github.com/starkware-libs/stwo-cairo", rev = "2b1fb4ded5496fb2db4e8261cd5ee5ef6b710839" }
+circuit-common = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
+circuit-multiverifier = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
+circuit-registry = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
+circuit-serialize = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
+circuit-verifier = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
+circuits = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
+leaf-prover = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
+num-bigint = "0.4"
+serde = "1"
+serde_json = "1"
+stwo = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
+stwo-cairo-dev-utils = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
+stwo-cairo-prover = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
+stwo-run-and-prove-recursive-tree = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
 
 [profile.release]
 lto = true

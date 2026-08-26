@@ -1,19 +1,16 @@
 {
     "channel_hash": "blake2s",
     "channel_salt": 0,
-    "pcs_config": {
+    "fri_config": {
         "pow_bits": 26,
-        "fri_config": {
-            "log_last_layer_degree_bound": 0,
-            "log_blowup_factor": 1,
-            "n_queries": 70,
-            "fold_step": 1
-        },
-        "min_lifting_log_size": 0
+        "log_blowup_factor": 1,
+        "log_last_layer_degree_bound": 0,
+        "n_queries": 70,
+        "fold_step": 1
     },
     "preprocessed_trace": "canonical_small",
     "store_polynomials_coefficients": false,
     "include_all_preprocessed_columns": false,
     "opt_n_id_to_big_components": null,
-    "raise_min_lifting_to_max_column": false
+    "lifting_size_policy": "auto"
 }

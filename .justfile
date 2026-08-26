@@ -86,6 +86,7 @@ check:
     cd ../stwo
     for g in trivial fib journal; do
         RUST_MIN_STACK=8388608 cargo run --release --locked -- size "$g"
+        RUST_MIN_STACK=8388608 cargo run --release --locked -- size "$g.leaf"
     done
 
 # Prove the Risc0 guests and write artifacts/risc0/<guest>.bin (needs r0vm)
@@ -116,6 +117,7 @@ prove-stwo:
     cd stwo
     for g in trivial fib journal; do
         RUST_MIN_STACK=8388608 cargo run --release -- prove "$g"
+        RUST_MIN_STACK=8388608 cargo run --release -- wrap "$g"
     done
 
 # Check if taplo is installed
