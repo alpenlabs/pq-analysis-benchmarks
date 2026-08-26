@@ -6,7 +6,9 @@ on:
   push:
     branches: [main]
 
-permissions: {}
+# The repository is private, so checkout needs contents: read.
+permissions:
+  contents: read
 
 jobs:
   actionlint:

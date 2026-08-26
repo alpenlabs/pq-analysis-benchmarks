@@ -11,7 +11,9 @@ env:
   RISC0_SKIP_BUILD: 1
   SP1_SKIP_PROGRAM_BUILD: true
 
-permissions: {}
+# The repository is private, so checkout needs contents: read.
+permissions:
+  contents: read
 
 jobs:
   clippy:
