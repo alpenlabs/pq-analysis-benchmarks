@@ -1,0 +1,9 @@
+[package]
+name = "fib"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sp1-zkvm = "=6.3.1"
+
+[workspace]

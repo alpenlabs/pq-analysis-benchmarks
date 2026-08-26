@@ -1,5 +1,8 @@
-//! `prove`: run the guest and write a compressed proof and verifying key to `artifacts/sp1/`.
-//! `size`:  read them back and report the serialized size per component.
+//! `prove <guest>`: run the guest and write a compressed proof and verifying key to
+//! `artifacts/sp1/<guest>.{bin,vk}`.
+//! `size <guest>`:  read them back and report the serialized size per component.
+//!
+//! Guests: trivial, fib, journal.
 
 use anyhow::{bail, Result};
 use serde::Serialize;
@@ -7,20 +10,47 @@ use sp1_sdk::blocking::{LightProver, ProveRequest, Prover, ProverClient};
 use sp1_sdk::prover::ProvingKey;
 use sp1_sdk::{include_elf, Elf, SP1Proof, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey};
 
-const ELF: Elf = include_elf!("trivial");
-const PROOF: &str = "../artifacts/sp1/trivial.bin";
-const VK: &str = "../artifacts/sp1/trivial.vk";
+/// Shard size (cycles) used when proving `fib`; the default is 2^24, which
+/// would fit it in one shard.
+const FIB_SHARD_SIZE: u64 = 1 << 22;
 
-fn prove() -> Result<()> {
+fn elf(name: &str) -> Result<Elf> {
+    Ok(match name {
+        "trivial" => include_elf!("trivial"),
+        "fib" => include_elf!("fib"),
+        "journal" => include_elf!("journal"),
+        _ => bail!("unknown guest {name}"),
+    })
+}
+
+fn paths(name: &str) -> (String, String) {
+    (
+        format!("../artifacts/sp1/{name}.bin"),
+        format!("../artifacts/sp1/{name}.vk"),
+    )
+}
+
+fn prove(name: &str) -> Result<()> {
+    let elf = elf(name)?;
+    let (proof_path, vk_path) = paths(name);
+    let shard_size = match name {
+        "fib" => FIB_SHARD_SIZE,
+        _ => 1 << 24,
+    };
+    std::env::set_var("SHARD_SIZE", shard_size.to_string());
     let client = ProverClient::from_env();
-    let (_, report) = client.execute(ELF, SP1Stdin::new()).run()?;
-    println!("{} cycles", report.total_instruction_count());
-    let pk = client.setup(ELF)?;
+    let (_, report) = client.execute(elf.clone(), SP1Stdin::new()).run()?;
+    let cycles = report.total_instruction_count();
+    println!(
+        "{name}: {cycles} cycles, shard size {shard_size}, {} shards",
+        cycles.div_ceil(shard_size)
+    );
+    let pk = client.setup(elf)?;
     let vk = pk.verifying_key().clone();
     let proof = client.prove(&pk, SP1Stdin::new()).compressed().run()?;
     client.verify(&proof, &vk, None)?;
-    proof.save(PROOF)?;
-    std::fs::write(VK, bincode::serialize(&vk)?)?;
+    proof.save(&proof_path)?;
+    std::fs::write(&vk_path, bincode::serialize(&vk)?)?;
     Ok(())
 }
 
@@ -28,9 +58,10 @@ fn len<T: Serialize>(v: &T) -> Result<usize> {
     Ok(bincode::serialized_size(v)? as usize)
 }
 
-fn size() -> Result<()> {
-    let proof = SP1ProofWithPublicValues::load(PROOF)?;
-    let vk: SP1VerifyingKey = bincode::deserialize(&std::fs::read(VK)?)?;
+fn size(name: &str) -> Result<()> {
+    let (proof_path, vk_path) = paths(name);
+    let proof = SP1ProofWithPublicValues::load(&proof_path)?;
+    let vk: SP1VerifyingKey = bincode::deserialize(&std::fs::read(&vk_path)?)?;
     // LightProver verifies without building proving keys.
     LightProver::new().verify(&proof, &vk, None)?;
     let p = match &proof.proof {
@@ -70,10 +101,13 @@ fn size() -> Result<()> {
         ("public_values", len(&proof.public_values)?),
         ("sp1_version", len(&proof.sp1_version)?),
         ("tee_proof", len(&proof.tee_proof)?),
-        ("file total", std::fs::metadata(PROOF)?.len() as usize),
-        ("verifying key file", std::fs::metadata(VK)?.len() as usize),
+        ("file total", std::fs::metadata(&proof_path)?.len() as usize),
+        (
+            "verifying key file",
+            std::fs::metadata(&vk_path)?.len() as usize,
+        ),
     ];
-    println!("sp1_version = {}", proof.sp1_version);
+    println!("guest = {name}, sp1_version = {}", proof.sp1_version);
     for (name, n) in rows {
         println!("{n:>8}  {name}");
     }
@@ -81,9 +115,13 @@ fn size() -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    match std::env::args().nth(1).as_deref() {
-        Some("prove") => prove(),
-        Some("size") => size(),
-        _ => bail!("usage: script prove|size"),
+    let args: Vec<String> = std::env::args().collect();
+    match (
+        args.get(1).map(String::as_str),
+        args.get(2).map(String::as_str),
+    ) {
+        (Some("prove"), Some(g)) => prove(g),
+        (Some("size"), Some(g)) => size(g),
+        _ => bail!("usage: script prove|size <trivial|fib|journal>"),
     }
 }

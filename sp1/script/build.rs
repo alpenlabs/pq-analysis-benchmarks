@@ -1,3 +1,5 @@
 fn main() {
-    sp1_build::build_program_with_args("../program", Default::default());
+    for p in ["trivial", "fib", "journal"] {
+        sp1_build::build_program_with_args(&format!("../programs/{p}"), Default::default());
+    }
 }

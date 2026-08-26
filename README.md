@@ -32,10 +32,12 @@ https://docs.succinct.xyz/docs/sp1/getting-started/install. Then:
 
 ```sh
 cd sp1
-cargo run --release -- prove   # writes artifacts/sp1/trivial.{bin,vk}
-cargo run --release -- size    # size breakdown of that proof
+cargo run --release -- prove <guest>   # writes artifacts/sp1/<guest>.{bin,vk}
+cargo run --release -- size <guest>    # size breakdown of that proof
 ```
 
-Proving runs the CPU prover in-process. `size` needs only stable Rust and
-the committed artifacts (build with `SP1_SKIP_PROGRAM_BUILD=true` to skip
-the guest build).
+Guests: `trivial` (commits one `u32`), `fib` (a few million cycles, proved
+with a 2^22-cycle shard size so it spans several shards), `journal` (commits
+4 KiB). Proving runs the CPU prover in-process. `size` needs only stable
+Rust and the committed artifacts (build with `SP1_SKIP_PROGRAM_BUILD=true`
+to skip the guest build).

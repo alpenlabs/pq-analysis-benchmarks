@@ -80,7 +80,9 @@ check:
         RISC0_SKIP_BUILD=1 cargo run --release --locked -p host -- size "$g"
     done
     cd ../sp1
-    SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- size
+    for g in trivial fib journal; do
+        SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- size "$g"
+    done
 
 # Prove the Risc0 guests and write artifacts/risc0/<guest>.bin (needs r0vm)
 [group('prove')]
@@ -92,10 +94,15 @@ prove-risc0:
         cargo run --release -p host -- prove "$g"
     done
 
-# Prove the SP1 guest and write artifacts/sp1/trivial.{bin,vk} (needs cargo prove)
+# Prove the SP1 guests and write artifacts/sp1/<guest>.{bin,vk} (needs cargo prove)
 [group('prove')]
 prove-sp1:
-    cd sp1 && cargo run --release -- prove
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd sp1
+    for g in trivial fib journal; do
+        cargo run --release -- prove "$g"
+    done
 
 # Check if taplo is installed
 [group('prerequisites')]

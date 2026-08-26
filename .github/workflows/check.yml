@@ -70,8 +70,10 @@ jobs:
       - name: size
         working-directory: sp1
         run: |
-          cargo run --release --locked -- size | tee size.txt
-          grep -q '^ 1272573  file total$' size.txt
+          for g in trivial fib journal; do
+            cargo run --release --locked -- size "$g" | tee "size-$g.txt"
+            grep -q '^ 1272546  proof total (incl. enum tag)$' "size-$g.txt"
+          done
 
   check-success:
     name: Check that checks passed
