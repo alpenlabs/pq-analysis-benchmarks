@@ -3,7 +3,7 @@
 //! `artifacts/stwo/<guest>.bin`.
 //! `size <guest>`:  read that proof back, verify it, and report its size per component.
 //!
-//! Guests: trivial.
+//! Guests: trivial, fib, journal.
 
 use std::path::PathBuf;
 
@@ -89,6 +89,6 @@ fn main() -> Result<()> {
     ) {
         (Some("prove"), Some(g)) => prove(g),
         (Some("size"), Some(g)) => size(g),
-        _ => bail!("usage: stwo-size prove|size <trivial>"),
+        _ => bail!("usage: stwo-size prove|size <trivial|fib|journal>"),
     }
 }

@@ -84,7 +84,9 @@ check:
         SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- size "$g"
     done
     cd ../stwo
-    RUST_MIN_STACK=8388608 cargo run --release --locked -- size trivial
+    for g in trivial fib journal; do
+        RUST_MIN_STACK=8388608 cargo run --release --locked -- size "$g"
+    done
 
 # Prove the Risc0 guests and write artifacts/risc0/<guest>.bin (needs r0vm)
 [group('prove')]
@@ -106,10 +108,15 @@ prove-sp1:
         cargo run --release -- prove "$g"
     done
 
-# Prove the Stwo guest and write artifacts/stwo/trivial.bin
+# Prove the Stwo guests and write artifacts/stwo/<guest>.bin
 [group('prove')]
 prove-stwo:
-    cd stwo && RUST_MIN_STACK=8388608 cargo run --release -- prove trivial
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd stwo
+    for g in trivial fib journal; do
+        RUST_MIN_STACK=8388608 cargo run --release -- prove "$g"
+    done
 
 # Check if taplo is installed
 [group('prerequisites')]

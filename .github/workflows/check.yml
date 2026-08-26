@@ -100,8 +100,13 @@ jobs:
         env:
           RUST_MIN_STACK: 8388608
         run: |
-          cargo run --release --locked -- size trivial | tee size.txt
-          grep -q '^  546656  intrinsic total (size_estimate)$' size.txt
+          for g in trivial fib journal; do
+            cargo run --release --locked -- size "$g" | tee "size-$g.txt"
+            grep -q '^verified$' "size-$g.txt"
+          done
+          grep -q '^  546656  intrinsic total (size_estimate)$' size-trivial.txt
+          grep -q '^  616528  intrinsic total (size_estimate)$' size-fib.txt
+          grep -q '^  579224  intrinsic total (size_estimate)$' size-journal.txt
 
   check-success:
     name: Check that checks passed

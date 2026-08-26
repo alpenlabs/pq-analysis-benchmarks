@@ -62,8 +62,10 @@ RUST_MIN_STACK=8388608 cargo run --release -- prove <guest>   # writes artifacts
 RUST_MIN_STACK=8388608 cargo run --release -- size <guest>    # size breakdown of that proof
 ```
 
-Guests: `trivial` (writes one value to the output). Prover parameters are
-in `stwo/params.json`
+Guests: `trivial` (writes one value to the output), `fib` (100,000
+recursive steps; sized to stay under the 2^20-row limit of the
+`canonical_small` preprocessed trace), `journal` (writes 1,024 values to
+the output). Prover parameters are in `stwo/params.json`
 (`pow_bits` 26, blowup 2, 70 queries, `canonical_small` preprocessed trace).
 Stwo has no recursion wrap, so unlike the other two the proof is one STARK
 over the whole execution.
