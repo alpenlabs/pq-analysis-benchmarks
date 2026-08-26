@@ -1,20 +1,35 @@
-//! `prove`: run the guest and write a succinct receipt to `artifacts/risc0/`.
-//! `size`:  read that receipt and report its serialized size per component.
+//! `prove <guest>`: run the guest and write a succinct receipt to `artifacts/risc0/<guest>.bin`.
+//! `size <guest>`:  read that receipt and report its serialized size per component.
+//!
+//! Guests: trivial, fib, journal.
 
 use anyhow::{bail, Result};
-use methods::{GUEST_ELF, GUEST_ID};
-use risc0_zkvm::{default_prover, ExecutorEnv, InnerReceipt, ProverOpts, Receipt};
+use risc0_zkvm::{default_prover, ExecutorEnv, InnerReceipt, ProverOpts, Receipt, VerifierContext};
 use serde::Serialize;
 
-const RECEIPT: &str = "../artifacts/risc0/receipt.bin";
+fn guest(name: &str) -> Result<(&'static [u8], [u32; 8])> {
+    Ok(match name {
+        "trivial" => (methods::TRIVIAL_ELF, methods::TRIVIAL_ID),
+        "fib" => (methods::FIB_ELF, methods::FIB_ID),
+        "journal" => (methods::JOURNAL_ELF, methods::JOURNAL_ID),
+        _ => bail!("unknown guest {name}"),
+    })
+}
 
-fn prove() -> Result<()> {
+fn receipt_path(name: &str) -> String {
+    format!("../artifacts/risc0/{name}.bin")
+}
+
+fn prove(name: &str) -> Result<()> {
+    let (elf, id) = guest(name)?;
     let env = ExecutorEnv::builder().build()?;
-    let receipt = default_prover()
-        .prove_with_opts(env, GUEST_ELF, &ProverOpts::succinct())?
-        .receipt;
-    receipt.verify(GUEST_ID)?;
-    std::fs::write(RECEIPT, bincode::serialize(&receipt)?)?;
+    let info = default_prover().prove_with_opts(env, elf, &ProverOpts::succinct())?;
+    info.receipt.verify(id)?;
+    println!(
+        "{name}: {} cycles, {} segments",
+        info.stats.total_cycles, info.stats.segments
+    );
+    std::fs::write(receipt_path(name), bincode::serialize(&info.receipt)?)?;
     Ok(())
 }
 
@@ -22,9 +37,11 @@ fn len<T: Serialize>(v: &T) -> Result<usize> {
     Ok(bincode::serialized_size(v)? as usize)
 }
 
-fn size() -> Result<()> {
-    let bytes = std::fs::read(RECEIPT)?;
+fn size(name: &str) -> Result<()> {
+    let bytes = std::fs::read(receipt_path(name))?;
     let receipt: Receipt = bincode::deserialize(&bytes)?;
+    // Image IDs are placeholders under RISC0_SKIP_BUILD, so verify the seal only.
+    receipt.verify_integrity_with_context(&VerifierContext::default())?;
     let s = match &receipt.inner {
         InnerReceipt::Succinct(s) => s,
         other => bail!("expected a succinct receipt, got {other:?}"),
@@ -42,8 +59,11 @@ fn size() -> Result<()> {
         ("metadata", len(&receipt.metadata)?),
         ("receipt total", bytes.len()),
     ];
-    println!("hashfn = {}", s.hashfn);
-    println!("seal words = {}", s.seal.len());
+    println!(
+        "guest = {name}, hashfn = {}, seal words = {}",
+        s.hashfn,
+        s.seal.len()
+    );
     for (name, n) in rows {
         println!("{n:>8}  {name}");
     }
@@ -51,9 +71,13 @@ fn size() -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    match std::env::args().nth(1).as_deref() {
-        Some("prove") => prove(),
-        Some("size") => size(),
-        _ => bail!("usage: host prove|size"),
+    let args: Vec<String> = std::env::args().collect();
+    match (
+        args.get(1).map(String::as_str),
+        args.get(2).map(String::as_str),
+    ) {
+        (Some("prove"), Some(g)) => prove(g),
+        (Some("size"), Some(g)) => size(g),
+        _ => bail!("usage: host prove|size <trivial|fib|journal>"),
     }
 }

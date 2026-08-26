@@ -73,12 +73,22 @@ lint-fix: fmt-toml fmt-ws lint-fix-ws lint-fix-codespell
 # Re-derive the committed results from the committed artifacts (what CI runs)
 [group('check')]
 check:
-    cd risc0 && RISC0_SKIP_BUILD=1 cargo run --release --locked -p host -- size
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd risc0
+    for g in trivial fib journal; do
+        RISC0_SKIP_BUILD=1 cargo run --release --locked -p host -- size "$g"
+    done
 
-# Prove the Risc0 guest and write artifacts/risc0/receipt.bin (needs r0vm)
+# Prove the Risc0 guests and write artifacts/risc0/<guest>.bin (needs r0vm)
 [group('prove')]
 prove-risc0:
-    cd risc0 && cargo run --release -p host -- prove
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd risc0
+    for g in trivial fib journal; do
+        cargo run --release -p host -- prove "$g"
+    done
 
 # Check if taplo is installed
 [group('prerequisites')]

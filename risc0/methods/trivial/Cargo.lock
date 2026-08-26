@@ -596,13 +596,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "guest"
-version = "0.1.0"
-dependencies = [
- "risc0-zkvm",
-]
-
-[[package]]
 name = "hashbrown"
 version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1368,6 +1361,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e0d2eaa99c3c2e41547cfa109e910a68ea03823cccad4a0525dcbc9b01e8c71"
 dependencies = [
  "tracing-core",
+]
+
+[[package]]
+name = "trivial"
+version = "0.1.0"
+dependencies = [
+ "risc0-zkvm",
 ]
 
 [[package]]

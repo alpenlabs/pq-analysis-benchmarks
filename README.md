@@ -17,8 +17,10 @@ https://dev.risczero.com/api/zkvm/install. Then:
 
 ```sh
 cd risc0
-cargo run --release -p host -- prove   # writes artifacts/risc0/receipt.bin
-cargo run --release -p host -- size    # size breakdown of that receipt
+cargo run --release -p host -- prove <guest>   # writes artifacts/risc0/<guest>.bin
+cargo run --release -p host -- size <guest>    # size breakdown of that receipt
 ```
 
-`size` needs only stable Rust and the committed receipt.
+Guests: `trivial` (commits one `u32`), `fib` (a few million cycles, several
+segments), `journal` (commits 4 KiB). `size` needs only stable Rust and the
+committed receipts.

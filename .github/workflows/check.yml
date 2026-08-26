@@ -40,8 +40,10 @@ jobs:
       - name: size
         working-directory: risc0
         run: |
-          cargo run --release --locked -p host -- size | tee size.txt
-          grep -q '^  222668  seal (u32 words \* 4)$' size.txt
+          for g in trivial fib journal; do
+            cargo run --release --locked -p host -- size "$g" | tee "size-$g.txt"
+            grep -q '^  222668  seal (u32 words \* 4)$' "size-$g.txt"
+          done
 
   check-success:
     name: Check that checks passed
