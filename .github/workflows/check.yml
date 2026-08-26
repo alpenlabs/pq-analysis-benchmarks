@@ -135,6 +135,16 @@ jobs:
             grep -q '^  545896  leaf circuit proof (serialized)$' "size-$g-leaf.txt"
           done
 
+      - name: count
+        working-directory: stwo
+        env:
+          RUST_MIN_STACK: 8388608
+        run: |
+          for g in trivial fib journal; do
+            cargo run --release --locked -- count "$g" "count-$g.json"
+            diff "count-$g.json" ../results/stwo/ops.json
+          done
+
   check-success:
     name: Check that checks passed
     runs-on: ubuntu-latest

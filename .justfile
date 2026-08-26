@@ -92,6 +92,8 @@ check: patch-risc0 patch-sp1
     for g in trivial fib journal; do
         RUST_MIN_STACK=8388608 cargo run --release --locked -- size "$g"
         RUST_MIN_STACK=8388608 cargo run --release --locked -- size "$g.leaf"
+        RUST_MIN_STACK=8388608 cargo run --release --locked -- count "$g" "count-$g.json"
+        diff "count-$g.json" ../results/stwo/ops.json
     done
 
 # Fetch risc0-core and apply patches/risc0-core-3.0.2.patch into risc0/patched/

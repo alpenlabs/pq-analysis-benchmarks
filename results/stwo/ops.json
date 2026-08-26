@@ -1,0 +1,34 @@
+{
+  "system": "stwo",
+  "version": "starkware-libs/proving@49f8e037",
+  "artifact": "leaf circuit proof",
+  "verifier": "circuit_verifier::verify_circuit: the verifier is a stwo-circuits circuit; counts are its gates",
+  "hash": {
+    "function": "blake2s",
+    "compressions": 15332,
+    "gates": {
+      "blake_g": 1226560,
+      "triple_xor": 122656,
+      "m31_to_u32": 224990
+    }
+  },
+  "field": {
+    "base": "qm31",
+    "gates": {
+      "add": 232639,
+      "sub": 237782,
+      "mul": 263138,
+      "pointwise_mul": 88325,
+      "eq": 28465,
+      "permutation": 140,
+      "permutation_inputs": 18620,
+      "output": 9
+    },
+    "ops": {
+      "inv": 23,
+      "div": 910,
+      "guess": 208743
+    }
+  },
+  "n_vars": 6094390
+}

@@ -126,3 +126,19 @@ RUST_MIN_STACK=8388608 cargo run --release -- size <guest>.leaf   # size and ver
 ```
 
 `wrap` needs about 30 GB of memory and takes about 20 s per guest.
+
+```sh
+RUST_MIN_STACK=8388608 cargo run --release -- count <guest>   # writes results/stwo/ops.json
+```
+
+Upstream verifies a leaf circuit proof by building the verification circuit
+for it (`circuit_verifier::verify_circuit`, in the same gate DSL the leaf
+circuit is written in) and evaluating that circuit. The verifier therefore
+already is a circuit, and `count` reads its gate counts off the finalized
+`Circuit` with no instrumentation: QM31 `add`/`sub`/`mul`/`pointwise_mul`/`eq`
+gates and permutation gates on the field side, and on the hash side Blake2s
+G-function gates (80 per 64-byte compression, which is the integrality
+check), the `triple_xor` finalization and the `m31_to_u32` re-encoding at
+the hash boundary. Unlike the Risc0 and SP1 ledgers, which count native
+base-field operations of the shipped verifier code, this one counts gates
+over the degree-4 extension; the gate estimate accounts for that.

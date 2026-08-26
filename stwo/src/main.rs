@@ -5,6 +5,8 @@
 //! `wrap <guest>`:  run the guest as a task of the leaf bootloader, prove it, verify that proof
 //! inside the leaf verifier circuit and prove the circuit (upstream's `leaf_prover`), writing
 //! the leaf circuit proof to `artifacts/stwo/<guest>.leaf.json`.
+//! `count <guest> [out]`: verify the leaf proof and write the verification circuit's gate
+//!                  counts as JSON (default `results/stwo/ops.json`; same for every guest).
 //! `size <guest>.leaf`: report and verify that leaf circuit proof.
 //!
 //! Guests: trivial, fib, journal.
@@ -22,8 +24,10 @@ use circuit_multiverifier::verify::shared_config;
 use circuit_registry::CircuitRegistry;
 use circuit_serialize::deserialize::deserialize_proof_with_config;
 use circuit_verifier::verify::{CircuitConfig, CircuitPublicData, verify_circuit};
+use circuits::context::FinalizedContext;
 use circuits::ivalue::IValue;
 use leaf_prover::prove_leaf::prove_leaf_from_files;
+use serde::Serialize;
 use stwo::core::fields::qm31::QM31;
 use stwo::core::pcs::PcsConfig;
 use stwo::core::vcs_lifted::blake2_merkle::{Blake2sMerkleChannel, Blake2sMerkleHasher};
@@ -91,7 +95,9 @@ fn wrap(name: &str) -> Result<()> {
     Ok(())
 }
 
-fn size_leaf(name: &str) -> Result<()> {
+/// Verifies the leaf circuit proof of `name` by building the verification
+/// circuit, printing the size lines on the way; returns the finalized circuit.
+fn verify_leaf(name: &str) -> Result<FinalizedContext<QM31>> {
     let path = leaf_path(name);
     let leaf: LeafInput = serde_json::from_str(&std::fs::read_to_string(&path)?)?;
     let registry =
@@ -135,9 +141,134 @@ fn size_leaf(name: &str) -> Result<()> {
         preprocessed_column_log_sizes: layout,
         preprocessed_root: leaf.proof.preprocessed_root(),
     };
-    verify_circuit(circuit_config, proof, CircuitPublicData { output_values })
+    let context = verify_circuit(circuit_config, proof, CircuitPublicData { output_values })
         .map_err(|e| anyhow!("{e}"))?;
     println!("verified");
+    Ok(context)
+}
+
+fn size_leaf(name: &str) -> Result<()> {
+    verify_leaf(name).map(drop)
+}
+
+#[derive(Serialize)]
+struct Ledger {
+    system: &'static str,
+    version: &'static str,
+    artifact: &'static str,
+    verifier: &'static str,
+    hash: Hash,
+    field: Field,
+    n_vars: usize,
+}
+
+#[derive(Serialize)]
+struct Hash {
+    function: &'static str,
+    /// 64-byte Blake2s compressions (`Stats::blake_updates`).
+    compressions: usize,
+    /// Gates that implement them: `blake_g` is 80 per compression (10 rounds of
+    /// 8 G functions); `triple_xor` is the finalization; `m31_to_u32` re-encodes
+    /// field elements as 32-bit words at the hash boundary.
+    gates: HashGates,
+}
+
+#[derive(Serialize)]
+struct HashGates {
+    blake_g: usize,
+    triple_xor: usize,
+    m31_to_u32: usize,
+}
+
+#[derive(Serialize)]
+struct Field {
+    base: &'static str,
+    /// Gate counts from the finalized circuit (`Circuit`).
+    gates: FieldGates,
+    /// Higher-level operations that the gates above already include:
+    /// `inv` and `div` each add one `guess`, one `mul` and one `eq`.
+    ops: FieldOps,
+}
+
+#[derive(Serialize)]
+struct FieldGates {
+    add: usize,
+    sub: usize,
+    mul: usize,
+    pointwise_mul: usize,
+    eq: usize,
+    permutation: usize,
+    permutation_inputs: usize,
+    output: usize,
+}
+
+#[derive(Serialize)]
+struct FieldOps {
+    inv: usize,
+    div: usize,
+    guess: usize,
+}
+
+fn count(name: &str, out: &str) -> Result<()> {
+    let context = verify_leaf(name)?;
+    let (c, s) = (context.circuit(), context.stats());
+    assert_eq!(c.blake_g_gate.len(), 80 * s.blake_updates);
+    assert_eq!(
+        c.permutation.iter().map(|p| p.inputs.len()).sum::<usize>(),
+        s.permutation_inputs
+    );
+    let ledger = Ledger {
+        system: "stwo",
+        version: "starkware-libs/proving@49f8e037",
+        artifact: "leaf circuit proof",
+        verifier: "circuit_verifier::verify_circuit: the verifier is a stwo-circuits circuit; counts are its gates",
+        hash: Hash {
+            function: "blake2s",
+            compressions: s.blake_updates,
+            gates: HashGates {
+                blake_g: c.blake_g_gate.len(),
+                triple_xor: c.triple_xor.len(),
+                m31_to_u32: c.m31_to_u32.len(),
+            },
+        },
+        field: Field {
+            base: "qm31",
+            gates: FieldGates {
+                add: c.add.len(),
+                sub: c.sub.len(),
+                mul: c.mul.len(),
+                pointwise_mul: c.pointwise_mul.len(),
+                eq: c.eq.len(),
+                permutation: c.permutation.len(),
+                permutation_inputs: s.permutation_inputs,
+                output: c.output.len(),
+            },
+            ops: FieldOps {
+                inv: s.inv,
+                div: s.div,
+                guess: s.guess,
+            },
+        },
+        n_vars: c.n_vars,
+    };
+    let json = serde_json::to_string_pretty(&ledger)?;
+    std::fs::write(out, format!("{json}\n"))?;
+    let (h, f) = (&ledger.hash, &ledger.field);
+    println!("blake2s compressions = {}", h.compressions);
+    for (name, n) in [
+        ("blake_g", h.gates.blake_g),
+        ("triple_xor", h.gates.triple_xor),
+        ("m31_to_u32", h.gates.m31_to_u32),
+        ("qm31 add", f.gates.add),
+        ("qm31 sub", f.gates.sub),
+        ("qm31 mul", f.gates.mul),
+        ("qm31 pointwise_mul", f.gates.pointwise_mul),
+        ("eq", f.gates.eq),
+        ("permutation", f.gates.permutation),
+        ("output", f.gates.output),
+    ] {
+        println!("{n:>8}  {name} gates");
+    }
     Ok(())
 }
 
@@ -212,6 +343,11 @@ fn main() -> Result<()> {
             None => size(g),
         },
         (Some("wrap"), Some(g)) => wrap(g),
-        _ => bail!("usage: stwo-size prove|wrap|size <trivial|fib|journal>[.leaf]"),
+        (Some("count"), Some(g)) => count(
+            g,
+            args.get(3)
+                .map_or("../results/stwo/ops.json", String::as_str),
+        ),
+        _ => bail!("usage: stwo-size prove|wrap|size|count <trivial|fib|journal>[.leaf]"),
     }
 }
