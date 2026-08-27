@@ -258,26 +258,41 @@ MARK_START = "<!-- gates.py: table start -->"
 MARK_END = "<!-- gates.py: table end -->"
 
 
+def fmt_bytes(n):
+    return f"{n} B" if n < 1024 else f"{n / 1024:,.1f} KB" if n < 1024**2 else f"{n / 1024**2:,.2f} MB"
+
+
 def render_table(rows, baseline):
-    """Markdown table for the README: the Groth16 baseline, then each system as
-    deployed and with BLAKE3."""
+    """Markdown table for the README: each system as deployed and with BLAKE3,
+    alphabetical, then the compressed-proof Groth16 verifier as baseline."""
+    ref = next(r for r in baseline if r["gadget"].endswith("compressed_1_input"))
     lines = [
-        "| system | version | artifact | proof bytes | hash | nonfree gates | free (XOR) gates | total gates |",
-        "|---|---|---|---:|---|---:|---:|---:|",
+        "| verifier | hash | proof size | nonfree gates\\* (billions) | total gates\\* (billions) | nonfree vs. groth16 |",
+        "|---|---|---:|---:|---:|---:|",
     ]
-    for r in baseline:
+
+    def line(name, hash_, bytes_, nf, x):
         lines.append(
-            f"| {r['system']} | {r['version']} | {r['artifact']} | {r['proof_bytes']:,} | {r['hash']} | "
-            f"{r['nonfree']:,} | {r['xor']:,} | {r['total']:,} |"
+            f"| {name} | {hash_} | {fmt_bytes(bytes_)} | {nf / 1e9:,.2f} | {(nf + x) / 1e9:,.2f} | "
+            f"{nf / ref['nonfree']:.2f}x |"
         )
+
     for r in rows:
         nf, x = r["total_as_deployed"], r["residual_field_xor"] + r["hash_as_deployed_xor"]
-        lines.append(
-            f"| {r['system']} | {r['version']} | {r['artifact']} | {r['proof_bytes']:,} | {r['hash']} | "
-            f"{nf:,} | {x:,} | {nf + x:,} |"
-        )
+        line(f"{r['system']} {r['version'].split('@')[-1]}", r["hash"], r["proof_bytes"], nf, x)
         nf, x = r["total_with"]["blake3"], r["total_with_xor"]["blake3"]
-        lines.append(f"| | | | | blake3 (swap) | {nf:,} | {x:,} | {nf + x:,} |")
+        line(f"{r['system']}, blake3 swap", "blake3", r["proof_bytes"], nf, x)
+    line("groth16 bn254 (baseline)", "-", ref["proof_bytes"], ref["nonfree"], ref["xor"])
+    lines += [
+        "",
+        "\\* The STARK rows price field arithmetic and hash units; equality checks,",
+        "permutation networks, inversions supplied as witnesses and the multiplications",
+        "inside data-dependent exponentiations are counted in the ledgers but not priced",
+        "(see [Gate estimate](#gate-estimate)). Pricing them at this repository's gadget",
+        "costs would raise the as-deployed figures by well under 1% for Risc0 and SP1 and",
+        "by an estimated 1-2% for Stwo, and the Risc0 BLAKE3-swap figure by about 5%.",
+        "The Groth16 row is the complete verifier circuit.",
+    ]
     return "\n".join(lines)
 
 
