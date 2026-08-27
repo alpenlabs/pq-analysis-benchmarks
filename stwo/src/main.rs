@@ -19,8 +19,12 @@ use anyhow::{Result, anyhow, bail};
 use cairo_air::CairoProofForRustVerifier;
 use cairo_air::utils::{ProofFormat, deserialize_proof_from_file};
 use cairo_air::verifier::verify_cairo;
+use cairo_program_runner_lib::hints::compute_program_hash_chain;
+use cairo_program_runner_lib::types::HashFunc;
 use cairo_vm::types::layout_name::LayoutName;
+use cairo_vm::types::program::Program;
 use circuit_common::N_RESERVED;
+use circuit_common::finalize::ComponentSizes;
 use circuit_common::preprocessed::layout_from_component_sizes;
 use circuit_multiverifier::verify::shared_config;
 use circuit_registry::CircuitRegistry;
@@ -30,7 +34,10 @@ use circuits::context::FinalizedContext;
 use circuits::ivalue::IValue;
 use leaf_prover::prove_leaf::prove_leaf_from_files;
 use serde::Serialize;
+use starknet_types_core::felt::Felt;
+use stwo::core::fields::m31::P;
 use stwo::core::fields::qm31::QM31;
+use stwo::core::fri::FriConfig;
 use stwo::core::pcs::PcsConfig;
 use stwo::core::vcs_lifted::blake2_merkle::{Blake2sMerkleChannel, Blake2sMerkleHasher};
 use stwo_cairo_dev_utils::vm_utils::{ProgramType, run_and_adapt};
@@ -99,7 +106,16 @@ fn wrap(name: &str) -> Result<()> {
 
 /// Verifies the leaf circuit proof of `name` by building the verification
 /// circuit, printing the size lines on the way; returns the finalized circuit.
-fn verify_leaf(name: &str) -> Result<FinalizedContext<QM31>> {
+/// The registry entry and verifier configuration a leaf proof selects.
+struct LeafSetup {
+    leaf: LeafInput,
+    cairo_trace_log_size: u32,
+    fri: FriConfig,
+    sizes: ComponentSizes,
+    trace_log_size: u32,
+}
+
+fn leaf_setup(name: &str) -> Result<LeafSetup> {
     let path = leaf_path(name);
     let leaf: LeafInput = serde_json::from_str(&std::fs::read_to_string(&path)?)?;
     let registry =
@@ -112,7 +128,46 @@ fn verify_leaf(name: &str) -> Result<FinalizedContext<QM31>> {
     let config = registry.config(&entry.config).map_err(|e| anyhow!("{e}"))?;
     let layout = layout_from_component_sizes(&config.target_sizes());
     let trace_log_size = *layout.values().max().unwrap();
-    let pcs = PcsConfig::from_fri_and_trace_size(config.fri_config, trace_log_size);
+    Ok(LeafSetup {
+        leaf,
+        cairo_trace_log_size: entry.trace_log_size,
+        fri: config.fri_config,
+        sizes: config.target_sizes(),
+        trace_log_size,
+    })
+}
+
+/// Checks that the leaf's output preimage names the committed guest program:
+/// its first felt is the bootloader's Blake program hash of the task, which
+/// `wrap` ran from `programs/<name>/compiled.json`.
+fn check_program_hash(name: &str, leaf: &LeafInput) -> Result<()> {
+    let bytes = std::fs::read(program_path(name)?)?;
+    let program = Program::from_bytes(&bytes, Some("main")).map_err(|e| anyhow!("{e}"))?;
+    let stripped = program.get_stripped_program().map_err(|e| anyhow!("{e}"))?;
+    let computed =
+        compute_program_hash_chain(&stripped, 0, HashFunc::Blake).map_err(|e| anyhow!("{e:?}"))?;
+    let claimed = leaf
+        .output_preimage
+        .first()
+        .ok_or_else(|| anyhow!("empty output preimage"))?;
+    if Felt::from_dec_str(claimed)? != computed {
+        bail!("{name}: output preimage program hash {claimed} != {computed} from programs/{name}");
+    }
+    Ok(())
+}
+
+fn verify_leaf(name: &str) -> Result<FinalizedContext<QM31>> {
+    let path = leaf_path(name);
+    let LeafSetup {
+        leaf,
+        cairo_trace_log_size,
+        fri,
+        sizes,
+        trace_log_size,
+    } = leaf_setup(name)?;
+    check_program_hash(name, &leaf)?;
+    let layout = layout_from_component_sizes(&sizes);
+    let pcs = PcsConfig::from_fri_and_trace_size(fri, trace_log_size);
     let shared = shared_config(layout.clone(), pcs);
     let mut bytes = leaf.proof.proof.as_slice();
     let proof = deserialize_proof_with_config(&mut bytes, &shared.proof_config)
@@ -120,11 +175,7 @@ fn verify_leaf(name: &str) -> Result<FinalizedContext<QM31>> {
     println!(
         "guest = {name}.leaf, leaf verifier for Cairo trace log size {}, circuit hash {:?}, \
          circuit trace log size {trace_log_size}, pow_bits = {}, n_queries = {}, fold_step = {}",
-        entry.trace_log_size,
-        leaf.proof.circuit_hash,
-        config.fri_config.pow_bits,
-        config.fri_config.n_queries,
-        config.fri_config.fold_step,
+        cairo_trace_log_size, leaf.proof.circuit_hash, fri.pow_bits, fri.n_queries, fri.fold_step,
     );
     println!(
         "{:>8}  leaf circuit proof (serialized)",
@@ -363,6 +414,75 @@ fn size(name: &str) -> Result<()> {
 }
 
 /// Version of `name` as pinned in this workspace's `Cargo.lock`.
+#[derive(Serialize)]
+struct Params {
+    system: &'static str,
+    version: String,
+    artifact: &'static str,
+    field: FieldParams,
+    fri: FriParams,
+    trace_log_size: u32,
+    cairo_trace_log_size: u32,
+    security: Security,
+}
+
+#[derive(Serialize)]
+struct FieldParams {
+    base: &'static str,
+    modulus: u32,
+    extension_degree: usize,
+}
+
+#[derive(Serialize)]
+struct FriParams {
+    log_blowup: u32,
+    queries: usize,
+    log_fold: u32,
+    log_last_layer_degree_bound: u32,
+    pow_bits: u32,
+}
+
+#[derive(Serialize)]
+struct Security {
+    stated_bits: u32,
+    basis: &'static str,
+    source: &'static str,
+}
+
+/// Writes the proof-system parameters of the leaf verifier the proof
+/// selects from the registry, after verifying the proof.
+fn params(name: &str, out: &str) -> Result<()> {
+    verify_leaf(name)?;
+    let setup = leaf_setup(name)?;
+    let params = Params {
+        system: "stwo",
+        version: lock_version("stwo-cairo-prover"),
+        artifact: "leaf circuit proof",
+        field: FieldParams {
+            base: "m31",
+            modulus: P,
+            extension_degree: size_of::<QM31>() / size_of::<u32>(),
+        },
+        fri: FriParams {
+            log_blowup: setup.fri.log_blowup_factor,
+            queries: setup.fri.n_queries,
+            log_fold: setup.fri.fold_step,
+            log_last_layer_degree_bound: setup.fri.log_last_layer_degree_bound,
+            pow_bits: setup.fri.pow_bits,
+        },
+        trace_log_size: setup.trace_log_size,
+        cairo_trace_log_size: setup.cairo_trace_log_size,
+        security: Security {
+            stated_bits: setup.fri.security_bits(),
+            basis: "conjectured: pow_bits + log_blowup * queries",
+            source: "stwo/src/core/fri.rs, FriConfig::security_bits",
+        },
+    };
+    std::fs::write(out, format!("{}\n", serde_json::to_string_pretty(&params)?))?;
+    println!("{}", serde_json::to_string_pretty(&params)?);
+    Ok(())
+}
+
 fn lock_version(name: &str) -> String {
     let lock = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/./Cargo.lock"));
     let mut lines = lock.lines();
@@ -410,6 +530,11 @@ fn main() -> Result<()> {
             args.get(3)
                 .map_or("../results/stwo/ops.json", String::as_str),
         ),
-        _ => bail!("usage: stwo-size prove|wrap|size|count <trivial|fib|journal>[.leaf]"),
+        (Some("params"), Some(g)) => params(
+            g,
+            args.get(3)
+                .map_or("../results/stwo/params.json", String::as_str),
+        ),
+        _ => bail!("usage: stwo-size prove|wrap|size|count|params <trivial|fib|journal>[.leaf]"),
     }
 }

@@ -1,0 +1,23 @@
+{
+  "system": "sp1",
+  "version": "6.3.1",
+  "artifact": "compressed proof",
+  "field": {
+    "base": "koalabear",
+    "modulus": 2130706433,
+    "extension_degree": 4
+  },
+  "fri": {
+    "log_blowup": 2,
+    "queries": 124,
+    "log_fold": 1,
+    "pow_bits": 16
+  },
+  "log_stacking_height": 20,
+  "max_log_row_count": 21,
+  "security": {
+    "stated_bits": 100,
+    "basis": "unique decoding: queries = ceil((target - pow_bits) / -log2((1 + rate) / 2))",
+    "source": "sp1-primitives/src/fri_params.rs"
+  }
+}

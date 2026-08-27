@@ -3,4 +3,5 @@ count-*.json
 risc0/patched/
 sp1/patched/
 size-*.json
+params-*.json
 /gadgets/gadgets.json

@@ -255,6 +255,8 @@ def groth16_rows():
 
 README = "README.md"
 MARK_START = "<!-- gates.py: table start -->"
+PARAMS_START = "<!-- gates.py: params start -->"
+PARAMS_END = "<!-- gates.py: params end -->"
 MARK_END = "<!-- gates.py: table end -->"
 
 
@@ -296,10 +298,37 @@ def render_table(rows, baseline):
     return "\n".join(lines)
 
 
+PARAMS = {s: json.load(open(f"results/{s}/params.json")) for s in ("risc0", "sp1", "stwo")}
+
+
+def render_params():
+    """Markdown table of the proof-system parameters each verifier is compiled
+    with, from results/<system>/params.json."""
+    lines = [
+        "| verifier | field | rate | queries | fold | PoW bits | trace log size | stated security |",
+        "|---|---|---:|---:|---:|---:|---:|---|",
+    ]
+    for name, p in PARAMS.items():
+        f, fri, sec = p["field"], p["fri"], p["security"]
+        trace = p.get("trace_log_size", p.get("log_stacking_height"))
+        basis = sec["basis"].split(":")[0].split(";")[0]
+        lines.append(
+            f"| {name} {p['version'].split('@')[-1]} | {f['base']}^{f['extension_degree']} | "
+            f"1/{2 ** fri['log_blowup']} | {fri['queries']} | {2 ** fri['log_fold']} | {fri['pow_bits']} | "
+            f"{trace} | {sec['stated_bits']} bits, {basis} |"
+        )
+    return "\n".join(lines)
+
+
+def replace_between(text, start, end, body):
+    a, b = text.index(start) + len(start), text.index(end)
+    return text[:a] + "\n" + body + "\n" + text[b:]
+
+
 def update_readme(rows, baseline):
     text = open(README).read()
-    a, b = text.index(MARK_START) + len(MARK_START), text.index(MARK_END)
-    new = text[:a] + "\n" + render_table(rows, baseline) + "\n" + text[b:]
+    new = replace_between(text, MARK_START, MARK_END, render_table(rows, baseline))
+    new = replace_between(new, PARAMS_START, PARAMS_END, render_params())
     if new != text:
         open(README, "w").write(new)
 

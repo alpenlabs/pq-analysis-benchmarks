@@ -1,0 +1,24 @@
+{
+  "system": "stwo",
+  "version": "starkware-libs/proving@49f8e037",
+  "artifact": "leaf circuit proof",
+  "field": {
+    "base": "m31",
+    "modulus": 2147483647,
+    "extension_degree": 4
+  },
+  "fri": {
+    "log_blowup": 1,
+    "queries": 70,
+    "log_fold": 4,
+    "log_last_layer_degree_bound": 0,
+    "pow_bits": 26
+  },
+  "trace_log_size": 23,
+  "cairo_trace_log_size": 25,
+  "security": {
+    "stated_bits": 96,
+    "basis": "conjectured: pow_bits + log_blowup * queries",
+    "source": "stwo/src/core/fri.rs, FriConfig::security_bits"
+  }
+}

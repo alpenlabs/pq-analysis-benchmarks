@@ -47,9 +47,41 @@ Instrumentation of third-party crates is kept as patch files
 (`<workspace>/patches/`) and applied by `<workspace>/patch.sh` to the
 unmodified crates.io sources, which Cargo then uses via `[patch.crates-io]`.
 `just check` re-derives everything under `results/` from the committed
-artifacts. `results/<system>/ops.json` is the operation ledger of one
-verification; `gates.py` converts the three ledgers to a Boolean-gate
+artifacts. Each run first checks the artifact is the one it claims to be:
+Risc0 receipts are verified against the image ID and SP1 verifying keys
+against the key hash recorded in `artifacts/manifest.json` (written by
+`prove`, reproducible by building the guest sources), and the Stwo leaf's
+output preimage must name the Blake program hash of the committed
+`stwo/programs/<guest>/compiled.json`. `results/<system>/ops.json` is the operation ledger of one
+verification and `results/<system>/params.json` the proof-system parameters
+the verifier is compiled with; `gates.py` converts the three ledgers to a Boolean-gate
 estimate (`results/gates.json`).
+
+## Parameters
+
+The rows above are the systems as shipped; nothing is normalised to a common
+security level. The parameters each verifier is compiled with, read from the
+pinned crates by `params` in each workspace (`results/<system>/params.json`),
+are:
+
+<!-- gates.py: params start -->
+| verifier | field | rate | queries | fold | PoW bits | trace log size | stated security |
+|---|---|---:|---:|---:|---:|---:|---|
+| risc0 3.0.5 | babybear^4 | 1/4 | 50 | 16 | 0 | 18 | 97 bits, conjectured |
+| sp1 6.3.1 | koalabear^4 | 1/4 | 124 | 2 | 16 | 20 | 100 bits, unique decoding |
+| stwo 49f8e037 | m31^4 | 1/2 | 70 | 16 | 26 | 23 | 96 bits, conjectured |
+<!-- gates.py: params end -->
+
+"Stated security" is the figure the project's own source attaches to these
+parameters, on the basis it names. Risc0's 97 bits and Stwo's 96 bits are
+conjectured (Stwo's is `pow_bits + log_blowup * queries`); SP1 sizes its
+query count for 100 bits under the unique-decoding bound, which needs no
+conjecture and is why it uses 124 queries at the same rate Risc0 covers with
+50. Trace log size is the recursion or leaf circuit's trace for the measured
+proof (Risc0: po2 in the seal; SP1: the compressed stage's stacking height;
+Stwo: the leaf verifier circuit, wrapping a Cairo trace of log size 25). The
+three fields are all 31-bit primes with a degree-4 extension. The 124 SP1
+queries are also the 124 `pow` calls in its ledger.
 
 ## Risc0
 

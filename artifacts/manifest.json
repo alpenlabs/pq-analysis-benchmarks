@@ -1,0 +1,24 @@
+{
+  "risc0": {
+    "fib": {
+      "image_id": "145da2a48e3c1e5a579d024cc32af0b773e72a6623841c78a8af5516b058bfec"
+    },
+    "journal": {
+      "image_id": "32871f96a6b091f2d6f2eb46f8e98a998d102219b90161f4bb2803919ad46194"
+    },
+    "trivial": {
+      "image_id": "7264f368817a2b2da7cbc40661c8ae34691c5c12a15708dc31040d418c9ee41e"
+    }
+  },
+  "sp1": {
+    "fib": {
+      "vk_hash": "0x009594a4e395f97b50c84361202f11ffa76d9dd78f68faa4c0da23cc712cf93f"
+    },
+    "journal": {
+      "vk_hash": "0x008de5d5b85912de1f6e7e2af60f7228f43d1f44d0e527a71086992dd0770fa4"
+    },
+    "trivial": {
+      "vk_hash": "0x005fa896233906048c527a4c3dead1e43f4d78e3069da43603830ea67e40a957"
+    }
+  }
+}

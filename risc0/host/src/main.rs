@@ -12,6 +12,11 @@
 mod count;
 
 use anyhow::{bail, Result};
+use risc0_circuit_recursion::CircuitImpl;
+use risc0_core::field::baby_bear::{Elem, ExtElem, P};
+use risc0_core::field::{Elem as _, ExtElem as _};
+use risc0_zkp::adapter::CircuitInfo;
+use risc0_zkvm::sha::{Digest, Digestible};
 use risc0_zkvm::{default_prover, ExecutorEnv, InnerReceipt, ProverOpts, Receipt, VerifierContext};
 use serde::Serialize;
 
@@ -28,11 +33,49 @@ fn receipt_path(name: &str) -> String {
     format!("../artifacts/risc0/{name}.bin")
 }
 
+const MANIFEST: &str = "../artifacts/manifest.json";
+
+/// Image ID the committed receipt of `name` must be bound to
+/// (`artifacts/manifest.json`, written by `prove`).
+fn expected_image_id(name: &str) -> Result<Digest> {
+    let manifest: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(MANIFEST)?)?;
+    let hex = manifest["risc0"][name]["image_id"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("no risc0/{name} entry in {MANIFEST}"))?;
+    let bytes: Vec<u8> = (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16))
+        .collect::<Result<_, _>>()?;
+    Ok(Digest::try_from(bytes.as_slice())?)
+}
+
+/// Loads the committed receipt and verifies it, seal and claim, against the
+/// manifest's image ID with `ctx`.
+fn load_receipt(name: &str, ctx: &VerifierContext) -> Result<Receipt> {
+    let receipt: Receipt = bincode::deserialize(&std::fs::read(receipt_path(name))?)?;
+    let image_id = expected_image_id(name).map_err(|e| {
+        let claimed = receipt
+            .claim()
+            .ok()
+            .and_then(|c| c.as_value().ok().map(|c| c.pre.digest()));
+        anyhow::anyhow!("{e}; the committed receipt claims image ID {claimed:?}")
+    })?;
+    receipt.verify_with_context(ctx, image_id)?;
+    Ok(receipt)
+}
+
 fn prove(name: &str) -> Result<()> {
     let (elf, id) = guest(name)?;
     let env = ExecutorEnv::builder().build()?;
     let info = default_prover().prove_with_opts(env, elf, &ProverOpts::succinct())?;
     info.receipt.verify(id)?;
+    let mut manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(MANIFEST)?)?;
+    manifest["risc0"][name]["image_id"] = Digest::from(id).to_string().into();
+    std::fs::write(
+        MANIFEST,
+        format!("{}\n", serde_json::to_string_pretty(&manifest)?),
+    )?;
     println!(
         "{name}: {} cycles, {} segments",
         info.stats.total_cycles, info.stats.segments
@@ -56,9 +99,7 @@ struct Size {
 
 fn size(name: &str, out: &str) -> Result<()> {
     let bytes = std::fs::read(receipt_path(name))?;
-    let receipt: Receipt = bincode::deserialize(&bytes)?;
-    // Image IDs are placeholders under RISC0_SKIP_BUILD, so verify the seal only.
-    receipt.verify_integrity_with_context(&VerifierContext::default())?;
+    let receipt = load_receipt(name, &VerifierContext::default())?;
     let s = match &receipt.inner {
         InnerReceipt::Succinct(s) => s,
         other => bail!("expected a succinct receipt, got {other:?}"),
@@ -112,12 +153,13 @@ struct Ledger {
 
 fn count(name: &str, out: &str) -> Result<()> {
     let receipt: Receipt = bincode::deserialize(&std::fs::read(receipt_path(name))?)?;
+    let image_id = load_receipt(name, &VerifierContext::default()).and(expected_image_id(name))?;
     let (suite, counters) = count::counting_suite();
     let mut suites = VerifierContext::default_hash_suites();
     suites.insert(suite.name.clone(), suite);
     let ctx = VerifierContext::default().with_suites(suites);
     let start = count::Ops::now();
-    receipt.verify_integrity_with_context(&ctx)?;
+    receipt.verify_with_context(&ctx, image_id)?;
     let total = count::Ops::now().since(start);
     let ledger = Ledger {
         system: "risc0",
@@ -154,6 +196,78 @@ fn count(name: &str, out: &str) -> Result<()> {
 }
 
 /// Version of `name` as pinned in this workspace's `Cargo.lock`.
+#[derive(Serialize)]
+struct Params {
+    system: &'static str,
+    version: String,
+    artifact: &'static str,
+    field: FieldParams,
+    fri: FriParams,
+    trace_log_size: u32,
+    security: Security,
+}
+
+#[derive(Serialize)]
+struct FieldParams {
+    base: &'static str,
+    modulus: u32,
+    extension_degree: usize,
+}
+
+#[derive(Serialize)]
+struct FriParams {
+    log_blowup: u32,
+    queries: usize,
+    log_fold: u32,
+    pow_bits: u32,
+}
+
+#[derive(Serialize)]
+struct Security {
+    stated_bits: u32,
+    basis: &'static str,
+    source: &'static str,
+}
+
+/// Writes the proof-system parameters the verifier is compiled with, read
+/// from the `risc0-zkp` constants and the receipt itself.
+fn params(name: &str, out: &str) -> Result<()> {
+    let receipt = load_receipt(name, &VerifierContext::default())?;
+    let InnerReceipt::Succinct(s) = &receipt.inner else {
+        bail!("expected a succinct receipt");
+    };
+    // The seal starts with the circuit's globals followed by one element
+    // holding the po2 of the trace, read the way `ReadIOP::read_slice_with_po2`
+    // does.
+    let po2 = Elem::from_u32_words(&[s.seal[CircuitImpl::OUTPUT_SIZE]]).to_u32_words()[0];
+    assert!(po2 as usize <= risc0_zkp::MAX_CYCLES_PO2);
+    let params = Params {
+        system: "risc0",
+        version: lock_version("risc0-zkvm"),
+        artifact: "succinct receipt",
+        field: FieldParams {
+            base: "babybear",
+            modulus: P,
+            extension_degree: ExtElem::EXT_SIZE,
+        },
+        fri: FriParams {
+            log_blowup: risc0_zkp::INV_RATE.trailing_zeros(),
+            queries: risc0_zkp::QUERIES,
+            log_fold: risc0_zkp::FRI_FOLD.trailing_zeros(),
+            pow_bits: 0,
+        },
+        trace_log_size: po2,
+        security: Security {
+            stated_bits: 97,
+            basis: "conjectured; no proof-of-work grinding",
+            source: "risc0-zkp/src/lib.rs, doc comment on QUERIES",
+        },
+    };
+    std::fs::write(out, format!("{}\n", serde_json::to_string_pretty(&params)?))?;
+    println!("{}", serde_json::to_string_pretty(&params)?);
+    Ok(())
+}
+
 fn lock_version(name: &str) -> String {
     let lock = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../Cargo.lock"));
     let mut lines = lock.lines();
@@ -197,6 +311,11 @@ fn main() -> Result<()> {
             args.get(3)
                 .map_or("../results/risc0/ops.json", String::as_str),
         ),
-        _ => bail!("usage: host prove|size|count <trivial|fib|journal> [out.json]"),
+        (Some("params"), Some(g)) => params(
+            g,
+            args.get(3)
+                .map_or("../results/risc0/params.json", String::as_str),
+        ),
+        _ => bail!("usage: host prove|size|count|params <trivial|fib|journal> [out.json]"),
     }
 }

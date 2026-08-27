@@ -11,10 +11,15 @@
 
 use anyhow::{bail, Result};
 use p3_field::counters as c;
+use p3_field::PrimeField32;
 use serde::Serialize;
+use sp1_primitives::fri_params::{recursion_fri_config, SP1_TARGET_BITS_OF_SECURITY};
+use sp1_primitives::{SP1ExtensionField, SP1Field};
 use sp1_sdk::blocking::{LightProver, ProveRequest, Prover, ProverClient};
 use sp1_sdk::prover::ProvingKey;
-use sp1_sdk::{include_elf, Elf, SP1Proof, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey};
+use sp1_sdk::{
+    include_elf, Elf, HashableKey, SP1Proof, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey,
+};
 
 /// Shard size (cycles) used when proving `fib`; the default is 2^24, which
 /// would fit it in one shard.
@@ -34,6 +39,41 @@ fn paths(name: &str) -> (String, String) {
         format!("../artifacts/sp1/{name}.bin"),
         format!("../artifacts/sp1/{name}.vk"),
     )
+}
+
+const MANIFEST: &str = "../artifacts/manifest.json";
+
+fn read_artifact(name: &str) -> Result<(SP1ProofWithPublicValues, SP1VerifyingKey)> {
+    let (proof_path, vk_path) = paths(name);
+    let proof = SP1ProofWithPublicValues::load(&proof_path)?;
+    let vk: SP1VerifyingKey = bincode::deserialize(&std::fs::read(&vk_path)?)?;
+    Ok((proof, vk))
+}
+
+/// Checks the committed verifying key's hash against `artifacts/manifest.json`
+/// (written by `prove`).
+fn check_manifest(name: &str, vk: &SP1VerifyingKey) -> Result<()> {
+    let manifest: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(MANIFEST)?)?;
+    let expected = manifest["sp1"][name]["vk_hash"].as_str().ok_or_else(|| {
+        anyhow::anyhow!(
+            "no sp1/{name} entry in {MANIFEST}; the committed vk hashes to {}",
+            vk.bytes32()
+        )
+    })?;
+    if vk.bytes32() != expected {
+        bail!("{name}.vk: vk hash {} != manifest {expected}", vk.bytes32());
+    }
+    Ok(())
+}
+
+/// Loads the committed proof and verifying key of `name`, verifies the proof
+/// against the key, and checks the key against the manifest.
+fn load_artifact(name: &str) -> Result<(SP1ProofWithPublicValues, SP1VerifyingKey)> {
+    let (proof, vk) = read_artifact(name)?;
+    // LightProver verifies without building proving keys.
+    LightProver::new().verify(&proof, &vk, None)?;
+    check_manifest(name, &vk)?;
+    Ok((proof, vk))
 }
 
 fn prove(name: &str) -> Result<()> {
@@ -57,6 +97,13 @@ fn prove(name: &str) -> Result<()> {
     client.verify(&proof, &vk, None)?;
     proof.save(&proof_path)?;
     std::fs::write(&vk_path, bincode::serialize(&vk)?)?;
+    let mut manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(MANIFEST)?)?;
+    manifest["sp1"][name]["vk_hash"] = vk.bytes32().into();
+    std::fs::write(
+        MANIFEST,
+        format!("{}\n", serde_json::to_string_pretty(&manifest)?),
+    )?;
     Ok(())
 }
 
@@ -75,10 +122,7 @@ struct Size {
 
 fn size(name: &str, out: &str) -> Result<()> {
     let (proof_path, vk_path) = paths(name);
-    let proof = SP1ProofWithPublicValues::load(&proof_path)?;
-    let vk: SP1VerifyingKey = bincode::deserialize(&std::fs::read(&vk_path)?)?;
-    // LightProver verifies without building proving keys.
-    LightProver::new().verify(&proof, &vk, None)?;
+    let (proof, _vk) = load_artifact(name)?;
     let p = match &proof.proof {
         SP1Proof::Compressed(p) => p,
         _ => bail!("expected a compressed proof"),
@@ -206,9 +250,7 @@ fn load(a: &std::sync::atomic::AtomicU64) -> u64 {
 }
 
 fn count(name: &str, out: &str) -> Result<()> {
-    let (proof_path, vk_path) = paths(name);
-    let proof = SP1ProofWithPublicValues::load(&proof_path)?;
-    let vk: SP1VerifyingKey = bincode::deserialize(&std::fs::read(&vk_path)?)?;
+    let (proof, vk) = read_artifact(name)?;
     // Parallel reductions combine partial sums with extra additions whose
     // number depends on how rayon splits the work; one thread makes the
     // count deterministic and equal to the sequential verifier's.
@@ -264,6 +306,9 @@ fn count(name: &str, out: &str) -> Result<()> {
     };
     let json = serde_json::to_string_pretty(&ledger)?;
     std::fs::write(out, format!("{json}\n"))?;
+    // Hashing the vk uses the counted permutation, so the manifest check
+    // runs after the ledger is read.
+    check_manifest(name, &vk)?;
     let p = &ledger.hash.permutations;
     println!("guest = {name}, poseidon2 permutations = {}", p.total);
     for (name, n) in [
@@ -292,6 +337,74 @@ fn count(name: &str, out: &str) -> Result<()> {
 }
 
 /// Version of `name` as pinned in this workspace's `Cargo.lock`.
+#[derive(Serialize)]
+struct Params {
+    system: &'static str,
+    version: String,
+    artifact: &'static str,
+    field: FieldParams,
+    fri: FriParams,
+    log_stacking_height: u32,
+    max_log_row_count: usize,
+    security: Security,
+}
+
+#[derive(Serialize)]
+struct FieldParams {
+    base: &'static str,
+    modulus: u32,
+    extension_degree: usize,
+}
+
+#[derive(Serialize)]
+struct FriParams {
+    log_blowup: usize,
+    queries: usize,
+    log_fold: u32,
+    pow_bits: usize,
+}
+
+#[derive(Serialize)]
+struct Security {
+    stated_bits: usize,
+    basis: &'static str,
+    source: &'static str,
+}
+
+/// Writes the proof-system parameters the compressed-proof verifier is
+/// compiled with (`sp1-primitives::fri_params`, `sp1-verifier::compressed`),
+/// after checking the artifact verifies.
+fn params(name: &str, out: &str) -> Result<()> {
+    load_artifact(name)?;
+    let fri = recursion_fri_config();
+    let params = Params {
+        system: "sp1",
+        version: lock_version("sp1-sdk"),
+        artifact: "compressed proof",
+        field: FieldParams {
+            base: "koalabear",
+            modulus: SP1Field::ORDER_U32,
+            extension_degree: size_of::<SP1ExtensionField>() / size_of::<SP1Field>(),
+        },
+        fri: FriParams {
+            log_blowup: fri.log_blowup,
+            queries: fri.num_queries,
+            log_fold: 1,
+            pow_bits: fri.proof_of_work_bits,
+        },
+        log_stacking_height: sp1_verifier::compressed::RECURSION_LOG_STACKING_HEIGHT,
+        max_log_row_count: sp1_verifier::compressed::RECURSION_MAX_LOG_ROW_COUNT,
+        security: Security {
+            stated_bits: SP1_TARGET_BITS_OF_SECURITY,
+            basis: "unique decoding: queries = ceil((target - pow_bits) / -log2((1 + rate) / 2))",
+            source: "sp1-primitives/src/fri_params.rs",
+        },
+    };
+    std::fs::write(out, format!("{}\n", serde_json::to_string_pretty(&params)?))?;
+    println!("{}", serde_json::to_string_pretty(&params)?);
+    Ok(())
+}
+
 fn lock_version(name: &str) -> String {
     let lock = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../Cargo.lock"));
     let mut lines = lock.lines();
@@ -335,6 +448,11 @@ fn main() -> Result<()> {
             args.get(3)
                 .map_or("../results/sp1/ops.json", String::as_str),
         ),
-        _ => bail!("usage: script prove|size|count <trivial|fib|journal> [out.json]"),
+        (Some("params"), Some(g)) => params(
+            g,
+            args.get(3)
+                .map_or("../results/sp1/params.json", String::as_str),
+        ),
+        _ => bail!("usage: script prove|size|count|params <trivial|fib|journal> [out.json]"),
     }
 }

@@ -59,6 +59,14 @@ jobs:
             cargo run --release --locked -p host -- count "$g" "count-$g.json"
             diff "count-$g.json" ../results/risc0/ops.json
           done
+
+      - name: params
+        working-directory: risc0
+        run: |
+          for g in trivial fib journal; do
+            cargo run --release --locked -p host -- params "$g" "params-$g.json"
+            diff "params-$g.json" ../results/risc0/params.json
+          done
       
   sp1:
     name: SP1 compressed proof
@@ -102,6 +110,14 @@ jobs:
           for g in trivial fib journal; do
             cargo run --release --locked -- count "$g" "count-$g.json"
             diff "count-$g.json" ../results/sp1/ops.json
+          done
+
+      - name: params
+        working-directory: sp1
+        run: |
+          for g in trivial fib journal; do
+            cargo run --release --locked -- params "$g" "params-$g.json"
+            diff "params-$g.json" ../results/sp1/params.json
           done
 
   stwo:
@@ -151,6 +167,16 @@ jobs:
           for g in trivial fib journal; do
             cargo run --release --locked -- count "$g" "count-$g.json"
             diff "count-$g.json" ../results/stwo/ops.json
+          done
+
+      - name: params
+        working-directory: stwo
+        env:
+          RUST_MIN_STACK: 8388608
+        run: |
+          for g in trivial fib journal; do
+            cargo run --release --locked -- params "$g" "params-$g.json"
+            diff "params-$g.json" ../results/stwo/params.json
           done
 
   gadgets:

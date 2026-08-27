@@ -82,6 +82,8 @@ check: patch-risc0 patch-sp1
         diff "size-$g.json" ../results/risc0/size.json
         RISC0_SKIP_BUILD=1 cargo run --release --locked -p host -- count "$g" "count-$g.json"
         diff "count-$g.json" ../results/risc0/ops.json
+        RISC0_SKIP_BUILD=1 cargo run --release --locked -p host -- params "$g" "params-$g.json"
+        diff "params-$g.json" ../results/risc0/params.json
     done
     cd ../sp1
     for g in trivial fib journal; do
@@ -89,6 +91,8 @@ check: patch-risc0 patch-sp1
         diff "size-$g.json" ../results/sp1/size.json
         SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- count "$g" "count-$g.json"
         diff "count-$g.json" ../results/sp1/ops.json
+        SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- params "$g" "params-$g.json"
+        diff "params-$g.json" ../results/sp1/params.json
     done
     cd ../stwo
     for g in trivial fib journal; do
@@ -97,6 +101,8 @@ check: patch-risc0 patch-sp1
         diff "size-$g.json" ../results/stwo/size.json
         RUST_MIN_STACK=8388608 cargo run --release --locked -- count "$g" "count-$g.json"
         diff "count-$g.json" ../results/stwo/ops.json
+        RUST_MIN_STACK=8388608 cargo run --release --locked -- params "$g" "params-$g.json"
+        diff "params-$g.json" ../results/stwo/params.json
     done
     cd ../gadgets
     cargo run --release --locked -- gadgets.json

@@ -4319,6 +4319,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cairo-air",
+ "cairo-program-runner-lib",
  "cairo-vm",
  "circuit-common",
  "circuit-multiverifier",
@@ -4330,6 +4331,7 @@ dependencies = [
  "num-bigint",
  "serde",
  "serde_json",
+ "starknet-types-core",
  "stwo",
  "stwo-cairo-dev-utils",
  "stwo-cairo-prover",

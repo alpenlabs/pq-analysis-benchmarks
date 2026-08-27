@@ -1,0 +1,22 @@
+{
+  "system": "risc0",
+  "version": "3.0.5",
+  "artifact": "succinct receipt",
+  "field": {
+    "base": "babybear",
+    "modulus": 2013265921,
+    "extension_degree": 4
+  },
+  "fri": {
+    "log_blowup": 2,
+    "queries": 50,
+    "log_fold": 4,
+    "pow_bits": 0
+  },
+  "trace_log_size": 18,
+  "security": {
+    "stated_bits": 97,
+    "basis": "conjectured; no proof-of-work grinding",
+    "source": "risc0-zkp/src/lib.rs, doc comment on QUERIES"
+  }
+}

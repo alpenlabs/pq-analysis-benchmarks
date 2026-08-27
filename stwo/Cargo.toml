@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1"
 cairo-air = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
+cairo-program-runner-lib = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
 cairo-vm = { version = "3.2.0", default-features = false }
 circuit-common = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
 circuit-multiverifier = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
@@ -17,6 +18,7 @@ leaf-prover = { git = "https://github.com/starkware-libs/proving", rev = "49f8e0
 num-bigint = "0.4"
 serde = "1"
 serde_json = "1"
+starknet-types-core = "=0.2.4"
 stwo = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
 stwo-cairo-dev-utils = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
 stwo-cairo-prover = { git = "https://github.com/starkware-libs/proving", rev = "49f8e037eb5dcfb587fa46d37c9611ceb6f51f78" }
