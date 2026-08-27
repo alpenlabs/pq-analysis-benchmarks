@@ -14,6 +14,8 @@
 mod blake2s;
 mod field;
 mod groth16;
+mod poseidon2;
+mod qm31;
 
 use std::collections::BTreeMap;
 
@@ -68,13 +70,26 @@ fn main() {
         .nth(1)
         .unwrap_or_else(|| "../results/gadgets.json".into());
     let mut gadgets = BTreeMap::new();
-    gadgets.insert("blake3_compression_64b", blake3_64b());
-    gadgets.insert("blake2s_compression_64b", blake2s::measure());
-    for (name, g) in field::measure() {
+    let mut record = |name: &'static str, g: Gadget| {
+        println!(
+            "{:<40} nonfree {:>13}  xor {:>13}  total {:>13}",
+            name, g.nonfree, g.xor, g.total
+        );
         gadgets.insert(name, g);
+    };
+    record("blake3_compression_64b", blake3_64b());
+    record("blake2s_compression_64b", blake2s::measure());
+    for (name, g) in field::measure() {
+        record(name, g);
+    }
+    for (name, g) in poseidon2::measure() {
+        record(name, g);
+    }
+    for (name, g) in qm31::measure() {
+        record(name, g);
     }
     for (name, g) in groth16::measure() {
-        gadgets.insert(name, g);
+        record(name, g);
     }
     let report = Report {
         source: BTreeMap::from([
@@ -85,12 +100,6 @@ fn main() {
         cost_model: "free-XOR garbling; nonfree = AND-type gates, xor = XOR/XNOR gates",
         gadgets,
     };
-    for (name, g) in &report.gadgets {
-        println!(
-            "{:<28} nonfree {:>7}  xor {:>8}  total {:>8}",
-            name, g.nonfree, g.xor, g.total
-        );
-    }
     std::fs::write(
         &out,
         format!("{}\n", serde_json::to_string_pretty(&report).unwrap()),

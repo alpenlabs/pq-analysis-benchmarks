@@ -43,6 +43,10 @@ jobs:
           cache-on-failure: true
           workspaces: ${{ matrix.workspace }}
 
+      - name: Install protoc (sp1-prover-types build script)
+        if: matrix.workspace == 'sp1'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler
+
       - name: Apply crate patches
         working-directory: ${{ matrix.workspace }}
         run: '[ ! -x patch.sh ] || ./patch.sh'

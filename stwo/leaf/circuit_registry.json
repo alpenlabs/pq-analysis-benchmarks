@@ -3,13 +3,13 @@
     "channel_hash": "blake2s",
     "channel_salt": 0,
     "fri_config": {
-      "pow_bits": 16,
+      "pow_bits": 26,
       "log_blowup_factor": 1,
       "log_last_layer_degree_bound": 0,
       "n_queries": 70,
       "fold_step": 1
     },
-    "preprocessed_trace": "canonical_small",
+    "preprocessed_trace": "canonical",
     "store_polynomials_coefficients": false,
     "include_all_preprocessed_columns": true,
     "opt_n_id_to_big_components": 16,
@@ -36,16 +36,72 @@
   "leaf_verifiers": [
     {
       "config": "default",
-      "trace_log_size": 20,
+      "trace_log_size": 25,
       "circuit_hash": [
-        "0xd2d85a42",
-        "0x79697b22",
-        "0x3a41a061",
-        "0x011cb393",
-        "0x7a040ec9",
-        "0x4508f4ca",
-        "0x42239409",
-        "0x60f3baea"
+        "0x41aa3c1f",
+        "0x626986f7",
+        "0xce55cb4c",
+        "0x896e58b2",
+        "0xaac047ff",
+        "0x4431c724",
+        "0x1e0d9ef2",
+        "0x2bcafcd9"
+      ]
+    },
+    {
+      "config": "default",
+      "trace_log_size": 26,
+      "circuit_hash": [
+        "0x9655a6ee",
+        "0xce0c61eb",
+        "0xbbd3e031",
+        "0x245350b0",
+        "0xe9e21745",
+        "0x51c1fa7a",
+        "0xbc39dd60",
+        "0xfcb4a8ea"
+      ]
+    },
+    {
+      "config": "default",
+      "trace_log_size": 27,
+      "circuit_hash": [
+        "0xb79ed666",
+        "0x83a16d7e",
+        "0xbd6b405e",
+        "0xbd6844f3",
+        "0x0997020a",
+        "0x67c86ca7",
+        "0x1e06b2fb",
+        "0x72b8e087"
+      ]
+    },
+    {
+      "config": "default",
+      "trace_log_size": 28,
+      "circuit_hash": [
+        "0xaad3c943",
+        "0xacca5fde",
+        "0xc5af89d4",
+        "0x92f51b51",
+        "0x12735c66",
+        "0x5408ab1c",
+        "0x397cd1d7",
+        "0x0e2e0eb0"
+      ]
+    },
+    {
+      "config": "default",
+      "trace_log_size": 29,
+      "circuit_hash": [
+        "0x563d1cef",
+        "0x9e543e32",
+        "0x92ad7435",
+        "0xb49a1989",
+        "0xa42c4367",
+        "0x28150b87",
+        "0x2f0fae62",
+        "0x77f5de17"
       ]
     }
   ],

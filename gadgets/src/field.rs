@@ -16,21 +16,21 @@ use num_bigint::BigUint;
 
 use crate::Gadget;
 
-const W: usize = 32;
+pub const W: usize = 32;
 
-const BABYBEAR_P: u32 = 0x7800_0001; // 2^31 - 2^27 + 1
-const BABYBEAR_MU: u32 = 0x8800_0001; // -p^-1 mod 2^32 (risc0-core `M`)
-const KOALABEAR_P: u32 = 0x7f00_0001; // 2^31 - 2^24 + 1
-const KOALABEAR_MU: u32 = 0x8100_0001;
-const M31_P: u32 = 0x7fff_ffff;
+pub const BABYBEAR_P: u32 = 0x7800_0001; // 2^31 - 2^27 + 1
+pub const BABYBEAR_MU: u32 = 0x8800_0001; // -p^-1 mod 2^32 (risc0-core `M`)
+pub const KOALABEAR_P: u32 = 0x7f00_0001; // 2^31 - 2^24 + 1
+pub const KOALABEAR_MU: u32 = 0x8100_0001;
+pub const M31_P: u32 = 0x7fff_ffff;
 
-fn word(bytes: &[U8], off: usize, bits: usize) -> BigIntWires {
+pub fn word(bytes: &[U8], off: usize, bits: usize) -> BigIntWires {
     BigIntWires {
         bits: (0..bits).map(|i| bytes[off + i / 8].0[i % 8]).collect(),
     }
 }
 
-fn pack_output(bits: &[WireId]) -> HashOutputWires {
+pub fn pack_output(bits: &[WireId]) -> HashOutputWires {
     let mut all = [FALSE_WIRE; 256];
     all[..bits.len()].copy_from_slice(bits);
     let value: [U8; 32] = core::array::from_fn(|i| {
@@ -41,7 +41,7 @@ fn pack_output(bits: &[WireId]) -> HashOutputWires {
     HashOutputWires { value }
 }
 
-fn constant(n: u32) -> BigIntWires {
+pub fn constant(n: u32) -> BigIntWires {
     BigIntWires::new_constant(W, &BigUint::from(n)).unwrap()
 }
 
@@ -57,7 +57,7 @@ fn reduce_once<C: g16ckt::CircuitContext>(circuit: &mut C, x: &BigIntWires, p: u
 }
 
 /// REDC, mirroring `monty_reduce` (p3-koala-bear) and `mul` (risc0-core).
-fn monty_mul<C: g16ckt::CircuitContext>(
+pub fn monty_mul<C: g16ckt::CircuitContext>(
     circuit: &mut C,
     a: &BigIntWires,
     b: &BigIntWires,
@@ -65,6 +65,18 @@ fn monty_mul<C: g16ckt::CircuitContext>(
     mu: u32,
 ) -> BigIntWires {
     let x = mul_karatsuba(circuit, a, b); // 64 bits
+    redc(circuit, &x, p, mu)
+}
+
+/// Montgomery reduction of a 64-bit `x` (`monty_reduce` in p3-koala-bear):
+/// `x * 2^-32 mod p`, for `x < p * 2^32`.
+pub fn redc<C: g16ckt::CircuitContext>(
+    circuit: &mut C,
+    x: &BigIntWires,
+    p: u32,
+    mu: u32,
+) -> BigIntWires {
+    assert_eq!(x.bits.len(), 2 * W);
     let x_lo = BigIntWires {
         bits: x.bits[..W].to_vec(),
     };
@@ -72,7 +84,7 @@ fn monty_mul<C: g16ckt::CircuitContext>(
     let u = mul_by_constant(circuit, &t, &BigUint::from(p)); // 64 bits
     let d = sub(
         circuit,
-        &x,
+        x,
         &BigIntWires {
             bits: u.bits[..2 * W].to_vec(),
         },
@@ -85,6 +97,18 @@ fn monty_mul<C: g16ckt::CircuitContext>(
     add_without_carry(circuit, &hi, &corr)
 }
 
+/// Montgomery multiplication by a constant (already in Montgomery form).
+pub fn monty_mul_const<C: g16ckt::CircuitContext>(
+    circuit: &mut C,
+    a: &BigIntWires,
+    c: u32,
+    p: u32,
+    mu: u32,
+) -> BigIntWires {
+    let x = mul_by_constant(circuit, a, &BigUint::from(c)); // 64 bits
+    redc(circuit, &x, p, mu)
+}
+
 fn monty_mul_ref(a: u32, b: u32, p: u32, mu: u32) -> u32 {
     let x = a as u64 * b as u64;
     let t = x.wrapping_mul(mu as u64) & 0xFFFF_FFFF;
@@ -94,7 +118,7 @@ fn monty_mul_ref(a: u32, b: u32, p: u32, mu: u32) -> u32 {
 }
 
 /// `a + b mod p` as both stacks write it: add, then subtract `p` unless that borrows.
-fn mod_add<C: g16ckt::CircuitContext>(
+pub fn mod_add<C: g16ckt::CircuitContext>(
     circuit: &mut C,
     a: &BigIntWires,
     b: &BigIntWires,
@@ -108,7 +132,7 @@ fn mod_add<C: g16ckt::CircuitContext>(
 }
 
 /// `a - b mod p`: subtract, add back `p` if that borrowed.
-fn mod_sub<C: g16ckt::CircuitContext>(
+pub fn mod_sub<C: g16ckt::CircuitContext>(
     circuit: &mut C,
     a: &BigIntWires,
     b: &BigIntWires,
@@ -125,7 +149,7 @@ fn mod_sub<C: g16ckt::CircuitContext>(
 
 /// Mersenne-31 multiply: 31x31 product, fold the high 31 bits onto the low
 /// 31 twice, then subtract `p` once if needed (stwo `M31::reduce` semantics).
-fn m31_mul<C: g16ckt::CircuitContext>(
+pub fn m31_mul<C: g16ckt::CircuitContext>(
     circuit: &mut C,
     a: &BigIntWires,
     b: &BigIntWires,
@@ -147,20 +171,28 @@ fn m31_mul<C: g16ckt::CircuitContext>(
     let mut hi2_padded = hi2.bits.clone();
     hi2_padded.resize(31, FALSE_WIRE);
     let r = add(circuit, &lo2, &BigIntWires { bits: hi2_padded }); // 32 bits, <= 2^31
-    reduce_once(circuit, &r, M31_P)
+    m31_bits(reduce_once(circuit, &r, M31_P))
 }
 
-fn m31_add<C: g16ckt::CircuitContext>(
+/// Drops the top bit of a reduced 32-bit M31 value (it is zero) so M31
+/// gadgets compose: they take and return 31-bit values.
+fn m31_bits(x: BigIntWires) -> BigIntWires {
+    BigIntWires {
+        bits: x.bits[..31].to_vec(),
+    }
+}
+
+pub fn m31_add<C: g16ckt::CircuitContext>(
     circuit: &mut C,
     a: &BigIntWires,
     b: &BigIntWires,
 ) -> BigIntWires {
     // stwo `partial_reduce(a + b)`: a, b < p so the sum fits 32 bits.
     let s = add(circuit, a, b); // 32 bits
-    reduce_once(circuit, &s, M31_P)
+    m31_bits(reduce_once(circuit, &s, M31_P))
 }
 
-fn m31_sub<C: g16ckt::CircuitContext>(
+pub fn m31_sub<C: g16ckt::CircuitContext>(
     circuit: &mut C,
     a: &BigIntWires,
     b: &BigIntWires,
@@ -178,7 +210,7 @@ fn m31_sub<C: g16ckt::CircuitContext>(
     let d = BigIntWires {
         bits: d.bits[..W].to_vec(),
     };
-    reduce_once(circuit, &d, M31_P)
+    m31_bits(reduce_once(circuit, &d, M31_P))
 }
 
 type Op = fn(&mut StreamingMode<ExecuteMode>, &BigIntWires, &BigIntWires) -> BigIntWires;

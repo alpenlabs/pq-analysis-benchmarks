@@ -81,6 +81,9 @@ jobs:
           cache-on-failure: true
           workspaces: sp1
 
+      - name: Install protoc (sp1-prover-types build script)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler
+
       - name: Apply Plonky3 patches
         run: ./sp1/patch.sh
 

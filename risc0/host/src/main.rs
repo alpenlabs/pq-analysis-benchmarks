@@ -104,7 +104,7 @@ fn size(name: &str, out: &str) -> Result<()> {
 #[derive(Serialize)]
 struct Ledger {
     system: &'static str,
-    version: &'static str,
+    version: String,
     artifact: &'static str,
     hash: count::Hash,
     field: count::Field,
@@ -121,7 +121,7 @@ fn count(name: &str, out: &str) -> Result<()> {
     let total = count::Ops::now().since(start);
     let ledger = Ledger {
         system: "risc0",
-        version: "3.0.5",
+        version: lock_version("risc0-zkvm"),
         artifact: "succinct receipt",
         hash: counters.report(),
         field: counters.field(total),
@@ -151,6 +151,33 @@ fn count(name: &str, out: &str) -> Result<()> {
         total.pow_mul, f.pow.calls
     );
     Ok(())
+}
+
+/// Version of `name` as pinned in this workspace's `Cargo.lock`.
+fn lock_version(name: &str) -> String {
+    let lock = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../Cargo.lock"));
+    let mut lines = lock.lines();
+    lines
+        .by_ref()
+        .find(|l| *l == format!("name = \"{name}\""))
+        .unwrap_or_else(|| panic!("{name} not in Cargo.lock"));
+    let version = lines
+        .next()
+        .unwrap()
+        .trim_start_matches("version = ")
+        .trim_matches('"');
+    match lines.next().and_then(|l| l.strip_prefix("source = \"git+")) {
+        Some(src) => {
+            let repo = src
+                .split('?')
+                .next()
+                .unwrap()
+                .trim_start_matches("https://github.com/");
+            let rev = &src.rsplit('#').next().unwrap()[..8];
+            format!("{repo}@{rev}")
+        }
+        None => version.to_string(),
+    }
 }
 
 fn main() -> Result<()> {

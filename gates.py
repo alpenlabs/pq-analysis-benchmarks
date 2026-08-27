@@ -4,25 +4,24 @@
 Writes results/gates.json, prints a summary, and rewrites the table between
 the `gates.py` markers in README.md, so the README follows the results.
 
-Costs are given as nonfree gates (AND-type; the cost under free-XOR) and
-XOR gates, read from results/gadgets.json, which gadgets/ produces with the
-gate-count instrumentation of alpenlabs/g16 (g16ckt) at a pinned revision.
-Every gadget there is validated against native arithmetic. What is not
-measured is labelled: the Poseidon2 permutation is priced from its measured
-per-operation gadgets (basis "priced"), and the expansion of Stwo's QM31
-gates into M31 operations is an implementation choice (basis "assumed").
+Costs are nonfree gates (AND-type; the cost under free-XOR) and XOR gates,
+read from results/gadgets.json, which gadgets/ produces with the gate-count
+instrumentation of alpenlabs/g16 (g16ckt) at a pinned revision. Every gadget
+there, the two Poseidon2 permutations and the QM31 operations included, is
+validated against the pinned verifier's native arithmetic. The one modelling
+choice is the layout of the QM31 multiplication gadget (QM31_MUL); the
+alternative is recorded alongside.
 
 Each system is totalled under its deployed hash and under every hash in
-SWAPS (BLAKE3, BLAKE2s, and the two Poseidon2 instances Risc0 and SP1
-ship), replacing each hash unit one-for-one and leaving the field
-arithmetic unchanged. That mapping is exact for Merkle 2-to-1 compressions
-and approximate for sponge absorbs and Fiat-Shamir squeezes, and other than
-the deployed hash it assumes a fork of prover and verifier that does not
-exist.
+SWAPS (BLAKE3, BLAKE2s, and the two Poseidon2 instances Risc0 and SP1 ship),
+replacing each hash unit one-for-one and leaving the field arithmetic
+unchanged. That mapping is exact for Merkle 2-to-1 compressions and
+approximate for sponge absorbs and Fiat-Shamir squeezes, and other than the
+deployed hash it assumes a fork of prover and verifier that does not exist.
 
-Only field arithmetic and hash compressions are priced. Equality checks,
-permutation networks, witness wires and re-encodings between field and
-32-bit words are counted in the ledgers but not priced here.
+Only field arithmetic and hash units are priced. Equality checks, permutation
+networks, witness wires and re-encodings between field and 32-bit words are
+counted in the ledgers but not priced here.
 """
 
 import json
@@ -33,14 +32,18 @@ GADGETS = json.load(open("results/gadgets.json"))
 
 def gadget(name, note):
     g = GADGETS["gadgets"][name]
-    return {"nonfree": g["nonfree"], "xor": g["xor"], "basis": "measured", "note": note, "gadget": name}
+    return {"nonfree": g["nonfree"], "xor": g["xor"], "note": note, "gadget": name}
 
 
-# basis: "measured" = a complete gadget built in g16ckt at the revision in
-# results/gadgets.json (see gadgets/), output validated against the crate's
-# native arithmetic, gates counted; "priced" = assembled from measured
-# gadgets by an operation count; "assumed" = an implementation choice with no
-# measurement behind it.
+def nonfree(cost):
+    return cost["nonfree"]
+
+
+def xor(cost):
+    return cost["xor"]
+
+
+# Every entry is a measured gadget (see gadgets/ and results/gadgets.json).
 COSTS = {
     "blake3_compression": gadget("blake3_compression_64b", "g16ckt's BLAKE3 gadget, one 64-byte block"),
     "blake2s_compression": gadget("blake2s_compression_64b", "BLAKE2s-256 from the same u32 primitives, one 64-byte block"),
@@ -59,53 +62,41 @@ COSTS = {
         "add": gadget("m31_add", "add, conditional subtract of p (stwo partial_reduce)"),
         "sub": gadget("m31_sub", "a + p - b, conditional subtract of p (stwo partial_reduce)"),
     },
+    "qm31": {
+        "mul": gadget("qm31_mul_karatsuba", "Karatsuba at both extension levels over the M31 gadgets, 2 + i by adds"),
+        "mul_schoolbook": gadget("qm31_mul_schoolbook", "stwo's own layout: 4 M31 products per CM31 product, 5 CM31 products"),
+        "pointwise_mul": gadget("qm31_pointwise_mul", "four M31 multiplications"),
+        "add": gadget("qm31_add", "four M31 additions"),
+        "sub": gadget("qm31_sub", "four M31 subtractions"),
+    },
+    "poseidon2_babybear_w24": gadget(
+        "poseidon2_babybear_w24_permutation",
+        "risc0-zkp poseidon2_mix step by step over the BabyBear gadgets: x^7, M_EXT by adds, M_INT by constant Montgomery multiplies",
+    ),
+    "poseidon2_koalabear_w16": gadget(
+        "poseidon2_koalabear_w16_permutation",
+        "p3 Poseidon2 as SP1 configures it, over the KoalaBear gadgets: x^3, mat4 external layer by adds, specialised internal layer by u64 sums and REDC",
+    ),
 }
 
-# M31 operations per QM31 gate. The gate is a field multiplication; how a
-# Boolean gadget implements it is a choice. stwo's own code
-# (crates/stwo/src/core/fields/{cm31,qm31}.rs) is schoolbook at both levels
-# and multiplies by R = 2 + i as a general CM31 multiplication: 20 M31 muls
-# and 14 adds. Karatsuba at both levels with R applied by shifts gives 9 muls
-# and 29 adds. The estimate uses Karatsuba; both are recorded. The M31
-# gadgets themselves are measured; the assumption is only the layout.
-QM31 = {
-    "basis": "assumed",
-    "used": "karatsuba",
-    "karatsuba": {
-        "mul": {"mul": 9, "add": 29},
-        "pointwise_mul": {"mul": 4, "add": 0},
-        "add": {"mul": 0, "add": 4},
-        "sub": {"mul": 0, "add": 4},
-    },
-    "schoolbook_as_in_stwo": {
-        "mul": {"mul": 20, "add": 14},
-        "pointwise_mul": {"mul": 4, "add": 0},
-        "add": {"mul": 0, "add": 4},
-        "sub": {"mul": 0, "add": 4},
-    },
-}
+# Which measured QM31 multiplication gadget prices Stwo's `mul` gates. The gate
+# is a field multiplication; the Boolean gadget's layout is a choice. stwo's
+# own code (crates/stwo/src/core/fields/{cm31,qm31}.rs) is schoolbook at both
+# levels and multiplies by R = 2 + i as a general CM31 product; Karatsuba at
+# both levels with R applied by adds is about half the gates. Both are
+# measured; the estimate uses Karatsuba and records the other.
+QM31_MUL = "mul"
 
-
-def nonfree(cost):
-    return cost["nonfree"]
-
-
-def xor(cost):
-    return cost["xor"]
-
+POSEIDON2_GADGET = {"risc0": "poseidon2_babybear_w24", "sp1": "poseidon2_koalabear_w16"}
 
 # Poseidon2 permutation composition, from the round structure of the pinned
 # code (risc0-zkp poseidon2/mod.rs; p3-poseidon2 with p3-koala-bear's
 # specialised internal layer). The field counters count every `Elem * Elem`,
-# including multiplications by constants, which a Boolean gadget implements
-# far more cheaply than a general multiply; the composition separates them.
-# `general`/`const_arbitrary`/`const_pow2` sum to the ledger's
-# mul_per_permutation, which the script asserts. There is no measured
-# Poseidon2 gadget. "counted_as_general" prices the counted operations with
-# every multiplication a general multiply; this is what the table uses. The
-# bracket adds any uncounted linear-layer work and then prices constant
-# multiplications as general multiplies ("upper"), power-of-two constants as
-# modular adds ("lower"), or all constants as modular adds ("floor").
+# including multiplications by constants; the composition separates them and
+# is asserted against the ledgers. The permutation gadget itself is measured;
+# `priced_from_ops` prices the counted operations with the per-operation
+# gadgets, every multiplication as a general multiply, as the cross-check
+# between the two routes.
 POSEIDON2 = {
     "risc0": {
         "width": 24,
@@ -117,7 +108,6 @@ POSEIDON2 = {
         "const_pow2": 216,  # M_EXT 4x4 circulant: x2, x4; 4 per chunk x 6 chunks x 9 applications
         "add": 2301,
         "sub": 0,
-        "uncounted_add_equiv": 0,
     },
     "sp1": {
         "width": 16,
@@ -129,12 +119,14 @@ POSEIDON2 = {
         "const_pow2": 0,
         "add": 832,
         "sub": 20,  # one negation per partial round, in the internal layer
-        # The internal (partial-round) diagonal is powers of two applied with raw
-        # u64 shifts and sums in p3-koala-bear's specialised layer, invisible to
-        # the counters: about 20 rounds x 16 cells x (shift-reduce + add).
-        "uncounted_add_equiv": 640,
+        # The internal diagonal is applied with raw u64 shifts and sums, which the
+        # counters do not see; the measured gadget includes it.
     },
 }
+
+
+def field_cost(ops, prices, kind=nonfree):
+    return sum(ops.get(k, 0) * kind(prices[k]) for k in ("mul", "add", "sub"))
 
 
 def poseidon2_cost(name, prices, ledger):
@@ -145,121 +137,92 @@ def poseidon2_cost(name, prices, ledger):
     # Risc0's suite also does 8 digest additions per Rng::mix outside the permutation.
     assert f["in_hash_suite"]["add"] // perms == m["add"]
     assert f["in_hash_suite"]["sub"] == m["sub"] * perms
-    mul, add = nonfree(prices["mul"]), nonfree(prices["add"])
-    consts = m["const_arbitrary"] + m["const_pow2"]
-    counted_adds = m["add"] * add + m["sub"] * nonfree(prices["sub"])
-    adds = counted_adds + m["uncounted_add_equiv"] * add
+    priced = (
+        (m["general"] + m["const_arbitrary"] + m["const_pow2"]) * nonfree(prices["mul"])
+        + m["add"] * nonfree(prices["add"])
+        + m["sub"] * nonfree(prices["sub"])
+    )
     return {
         "composition": m,
-        "per_permutation": {
-            "counted_as_general": (m["general"] + consts) * mul + counted_adds,
-            "upper": (m["general"] + consts) * mul + adds,
-            "lower": (m["general"] + m["const_arbitrary"]) * mul + m["const_pow2"] * add + adds,
-            "floor": m["general"] * mul + consts * add + adds,
-        },
-        "basis": "assumed",
-        "note": "no measured Poseidon2 gadget; counted_as_general is used in the table; upper/lower/floor include uncounted linear-layer work and price constant multiplications as general multiplies, power-of-two ones as adds, or all as adds",
+        "per_permutation": {"measured": nonfree(COSTS[POSEIDON2_GADGET[name]]), "priced_from_ops": priced},
     }
 
 
-def poseidon2_permutation_cost(name, kind=nonfree):
-    """Per-permutation cost of the Poseidon2 instance `name` ships, priced from
-    the measured per-operation gadgets (counted_as_general)."""
-    m = POSEIDON2[name]
-    prices = COSTS[{"risc0": "babybear", "sp1": "koalabear"}[name]]
-    return (
-        (m["general"] + m["const_arbitrary"] + m["const_pow2"]) * kind(prices["mul"])
-        + m["add"] * kind(prices["add"])
-        + m["sub"] * kind(prices["sub"])
-    )
-
-
 # Hash functions a verifier's Merkle tree and Fiat-Shamir channel could be
-# built on, priced per unit (one compression or one permutation). Every
-# system gets a total under each; a system's own hash reproduces its
-# as-deployed total. One unit of the deployed hash is mapped to one unit of
-# the replacement, which is exact for Merkle nodes and approximate for
-# absorbs and squeezes.
+# built on, priced per unit (one compression or one permutation). Every system
+# gets a total under each; a system's own hash reproduces its as-deployed
+# total.
 SWAPS = {
-    "blake3": {"cost": lambda kind=nonfree: kind(COSTS["blake3_compression"]), "basis": "measured"},
-    "blake2s": {"cost": lambda kind=nonfree: kind(COSTS["blake2s_compression"]), "basis": "measured"},
-    "poseidon2-babybear-w24": {"cost": lambda kind=nonfree: poseidon2_permutation_cost("risc0", kind), "basis": "priced"},
-    "poseidon2-koalabear-w16": {"cost": lambda kind=nonfree: poseidon2_permutation_cost("sp1", kind), "basis": "priced"},
+    "blake3": lambda kind=nonfree: kind(COSTS["blake3_compression"]),
+    "blake2s": lambda kind=nonfree: kind(COSTS["blake2s_compression"]),
+    "poseidon2-babybear-w24": lambda kind=nonfree: kind(COSTS["poseidon2_babybear_w24"]),
+    "poseidon2-koalabear-w16": lambda kind=nonfree: kind(COSTS["poseidon2_koalabear_w16"]),
 }
 
 
-def field_cost(ops, prices, kind=nonfree):
-    return sum(ops.get(k, 0) * kind(prices[k]) for k in ("mul", "add", "sub"))
-
-
-def unmeasured(ops, prices):
-    """Nonfree gates in `ops` priced by a cost whose basis is not "measured"."""
-    return sum(
-        ops.get(k, 0) * nonfree(prices[k]) for k in ("mul", "add", "sub") if prices[k]["basis"] != "measured"
-    )
+def row(ledger, path, hash_units, residual, residual_xor, hash_native, hash_native_xor, extra):
+    size = json.load(open(path.replace("ops.json", "size.json")))
+    return {
+        "system": ledger["system"],
+        "version": ledger["version"],
+        "artifact": ledger["artifact"],
+        "proof_bytes": size["proof_bytes"],
+        "hash": ledger["hash"]["function"],
+        "hash_units": hash_units,
+        "residual_field": residual,
+        "residual_field_xor": residual_xor,
+        "hash_as_deployed": hash_native,
+        "hash_as_deployed_xor": hash_native_xor,
+        "total_as_deployed": residual + hash_native,
+        "total_with": {k: residual + hash_units * cost() for k, cost in SWAPS.items()},
+        "total_with_xor": {k: residual_xor + hash_units * cost(xor) for k, cost in SWAPS.items()},
+        **extra,
+    }
 
 
 def poseidon2_system(name, path):
     ledger = json.load(open(path))
-    size = json.load(open(path.replace("ops.json", "size.json")))
     f = ledger["field"]
     prices = COSTS[f["base"]]
     perms = ledger["hash"]["permutations"]["total"]
-    residual = field_cost(f["residual"], prices)
-    residual_xor = field_cost(f["residual"], prices, xor)
-    hash_native = field_cost(f["in_hash_suite"], prices)
-    return {
-        "system": name,
-        "version": ledger["version"],
-        "artifact": ledger["artifact"],
-        "proof_bytes": size["proof_bytes"],
-        "hash": ledger["hash"]["function"],
-        "hash_units": perms,
-        "residual_field": residual,
-        "residual_field_xor": residual_xor,
-        "hash_as_deployed": hash_native,
-        "hash_as_deployed_xor": field_cost(f["in_hash_suite"], prices, xor),
-        "total_as_deployed": residual + hash_native,
-        "total_with": {k: residual + perms * v["cost"]() for k, v in SWAPS.items()},
-        "total_with_xor": {k: residual_xor + perms * v["cost"](xor) for k, v in SWAPS.items()},
-        "unmeasured_as_deployed": unmeasured(f["residual"], prices) + unmeasured(f["in_hash_suite"], prices),
-        "unmeasured_residual": unmeasured(f["residual"], prices),
-        "basis_note": "field operations priced with measured gadgets; the deployed-hash column prices the permutation's counted operations, see poseidon2",
-        "poseidon2": poseidon2_cost(name, prices, ledger),
-    }
+    perm = COSTS[POSEIDON2_GADGET[name]]
+    return row(
+        ledger,
+        path,
+        perms,
+        field_cost(f["residual"], prices),
+        field_cost(f["residual"], prices, xor),
+        perms * nonfree(perm),
+        perms * xor(perm),
+        {
+            "hash_priced_from_ops": field_cost(f["in_hash_suite"], prices),
+            "poseidon2": poseidon2_cost(name, prices, ledger),
+            "note": "hash_priced_from_ops is the same hash priced per counted field operation, for comparison with the measured permutation gadget",
+        },
+    )
 
 
 def stwo_system(path):
     ledger = json.load(open(path))
-    size = json.load(open(path.replace("ops.json", "size.json")))
     gates = ledger["field"]["gates"]
-    m31 = {"mul": 0, "add": 0}
-    for gate, per in QM31[QM31["used"]].items():
-        for op in ("mul", "add"):
-            m31[op] += gates[gate] * per[op]
-    residual = field_cost(m31, COSTS["m31"])
-    residual_xor = field_cost(m31, COSTS["m31"], xor)
+    q = COSTS["qm31"]
+    price = {"mul": q[QM31_MUL], "pointwise_mul": q["pointwise_mul"], "add": q["add"], "sub": q["sub"]}
+    residual = sum(gates[g] * nonfree(c) for g, c in price.items())
     compressions = ledger["hash"]["compressions"]
-    blake2s = compressions * nonfree(COSTS["blake2s_compression"])
-    return {
-        "system": "stwo",
-        "version": ledger["version"],
-        "artifact": ledger["artifact"],
-        "proof_bytes": size["proof_bytes"],
-        "hash": ledger["hash"]["function"],
-        "hash_units": compressions,
-        "m31_ops": m31,
-        "residual_field": residual,
-        "residual_field_xor": residual_xor,
-        "hash_as_deployed": blake2s,
-        "hash_as_deployed_xor": compressions * xor(COSTS["blake2s_compression"]),
-        "total_as_deployed": residual + blake2s,
-        "total_with": {k: residual + compressions * v["cost"]() for k, v in SWAPS.items()},
-        "total_with_xor": {k: residual_xor + compressions * v["cost"](xor) for k, v in SWAPS.items()},
-        "unmeasured_as_deployed": residual,
-        "unmeasured_residual": residual,
-        "basis_note": "QM31 gates expanded to M31 operations by an assumed Karatsuba layout (see qm31_in_m31_ops); M31 and hash gadgets measured",
-    }
+    h = COSTS["blake2s_compression"]
+    return row(
+        ledger,
+        path,
+        compressions,
+        residual,
+        sum(gates[g] * xor(c) for g, c in price.items()),
+        compressions * nonfree(h),
+        compressions * xor(h),
+        {
+            "residual_field_with_schoolbook_mul": residual + gates["mul"] * (nonfree(q["mul_schoolbook"]) - nonfree(q[QM31_MUL])),
+            "note": "QM31 mul gates priced with the Karatsuba gadget; residual_field_with_schoolbook_mul uses stwo's own layout",
+        },
+    )
 
 
 def groth16_rows():
@@ -285,7 +248,6 @@ def groth16_rows():
                 "xor": g["xor"],
                 "total": g["total"],
                 "gadget": name,
-                "basis": "measured",
             }
         )
     return rows
@@ -297,8 +259,8 @@ MARK_END = "<!-- gates.py: table end -->"
 
 
 def render_table(rows, baseline):
-    """Markdown table for the README: proof size and gate counts, as deployed and with BLAKE3,
-    then the Groth16 verifier as baseline."""
+    """Markdown table for the README: the Groth16 baseline, then each system as
+    deployed and with BLAKE3."""
     lines = [
         "| system | version | artifact | proof bytes | hash | nonfree gates | free (XOR) gates | total gates |",
         "|---|---|---|---:|---|---:|---:|---:|",
@@ -333,17 +295,16 @@ def main(out):
         poseidon2_system("sp1", "results/sp1/ops.json"),
         stwo_system("results/stwo/ops.json"),
     ]
-    swap_costs = {k: {"per_unit": v["cost"](), "xor": v["cost"](xor), "basis": v["basis"]} for k, v in SWAPS.items()}
     baseline = groth16_rows()
+    hash_per_unit = {k: {"nonfree": cost(), "xor": cost(xor)} for k, cost in SWAPS.items()}
     update_readme(rows, baseline)
     with open(out, "w") as fh:
         json.dump(
             {
                 "gadgets_source": GADGETS["source"],
                 "costs": COSTS,
-                "qm31_in_m31_ops": QM31,
-                "poseidon2": POSEIDON2,
-                "hash_per_unit": swap_costs,
+                "qm31_mul_gadget": QM31_MUL,
+                "hash_per_unit": hash_per_unit,
                 "baseline": baseline,
                 "systems": rows,
             },
@@ -351,36 +312,31 @@ def main(out):
             indent=2,
         )
         fh.write("\n")
+
     print("Nonfree gates per verification. 'field' is the non-hash arithmetic; 'as deployed' adds the shipped hash;")
     print("the remaining columns replace each hash unit with one unit of the named hash.")
     swaps = list(SWAPS)
-    head = f"{'':8s}{'units':>7s}{'field':>15s}{'as deployed':>15s}" + "".join(f"{k:>24s}" for k in swaps) + f"{'unmeasured':>12s}"
-    print(head)
+    print(f"{'':8s}{'units':>7s}{'field':>15s}{'as deployed':>15s}" + "".join(f"{k:>24s}" for k in swaps))
     for r in rows:
-        share = f"{100 * r['unmeasured_as_deployed'] / r['total_as_deployed']:.2f}%"
         line = f"{r['system']:8s}{r['hash_units']:>7d}{r['residual_field']:>15,d}{r['total_as_deployed']:>15,d}"
-        line += "".join(f"{r['total_with'][k]:>24,d}" for k in swaps) + f"{share:>12s}"
-        print(line)
+        print(line + "".join(f"{r['total_with'][k]:>24,d}" for k in swaps))
     print()
     for r in baseline:
         print(f"baseline {r['system']} {r['artifact']:22s} {r['proof_bytes']:>5} B  nonfree {r['nonfree']:>15,d}  xor {r['xor']:>15,d}")
     print()
-    print("Hash cost per unit (compression or permutation):")
-    for k, v in swap_costs.items():
-        print(f"{k:26s}{v['per_unit']:>12,d}  {v['basis']}")
-    print(
-        "unmeasured: share of the as-deployed total that rests on an assumed operation count "
-        "(Stwo's QM31 expansion). Poseidon2 is priced from measured per-operation gadgets, not a measured permutation gadget;"
-    )
-    print("its bracket (constant multiplications, uncounted linear layer) is under poseidon2.per_permutation:")
+    print("Hash cost per unit (compression or permutation), measured gadgets:")
+    for k, v in hash_per_unit.items():
+        print(f"{k:26s}{v['nonfree']:>12,d}")
+    print()
+    print("Poseidon2 permutation, measured gadget vs the counted field operations priced per operation:")
     for r in rows[:2]:
-        pp = r["poseidon2"]["per_permutation"]
-        c = r["poseidon2"]["composition"]
+        pp, c = r["poseidon2"]["per_permutation"], r["poseidon2"]["composition"]
         print(
             f"{r['system']:8s} muls {c['general']} general + {c['const_arbitrary']} arbitrary-constant + "
-            f"{c['const_pow2']} power-of-two, adds {c['add']} (+{c['uncounted_add_equiv']} uncounted): "
-            f"upper {pp['upper']:,d}  lower {pp['lower']:,d}  floor {pp['floor']:,d}"
+            f"{c['const_pow2']} power-of-two, adds {c['add']}, subs {c['sub']}: "
+            f"measured {pp['measured']:,d}  priced_from_ops {pp['priced_from_ops']:,d}"
         )
+    print(f"stwo residual with stwo's schoolbook QM31 mul instead of Karatsuba: {rows[2]['residual_field_with_schoolbook_mul']:,d}")
 
 
 if __name__ == "__main__":
