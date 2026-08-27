@@ -152,7 +152,9 @@ fn verify_leaf(name: &str) -> Result<FinalizedContext<QM31>> {
 #[derive(Serialize)]
 struct Size {
     /// Bytes a verifier needs beyond the public inputs: the serialized leaf
-    /// circuit proof. Excludes the output preimage.
+    /// circuit proof, the circuit hash that selects the registry entry and
+    /// the preprocessed root of that circuit (eight u32 words each).
+    /// Excludes the output preimage.
     proof_bytes: usize,
     components: std::collections::BTreeMap<&'static str, usize>,
 }
@@ -160,8 +162,14 @@ struct Size {
 fn size_leaf(name: &str, out: &str) -> Result<()> {
     verify_leaf(name)?;
     let leaf: LeafInput = serde_json::from_str(&std::fs::read_to_string(leaf_path(name))?)?;
-    let components =
-        std::collections::BTreeMap::from([("leaf_circuit_proof", leaf.proof.proof.len())]);
+    let components = std::collections::BTreeMap::from([
+        ("leaf_circuit_proof", leaf.proof.proof.len()),
+        ("circuit_hash", size_of_val(&leaf.proof.circuit_hash)),
+        (
+            "preprocessed_root",
+            size_of_val(&leaf.proof.circuit_preprocessed_root.0),
+        ),
+    ]);
     let size = Size {
         proof_bytes: components.values().sum(),
         components,

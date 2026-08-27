@@ -258,7 +258,7 @@
       "system": "stwo",
       "version": "starkware-libs/proving@49f8e037",
       "artifact": "leaf circuit proof",
-      "proof_bytes": 545896,
+      "proof_bytes": 545960,
       "hash": "blake2s",
       "hash_units": 15332,
       "residual_field": 6423136222,

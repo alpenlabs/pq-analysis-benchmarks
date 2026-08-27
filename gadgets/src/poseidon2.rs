@@ -253,12 +253,18 @@ fn sp1_permutation(c: &mut Ctx, state: &mut [BigIntWires]) {
 
 // ---------------------------------------------------------------- harness
 
-/// Runs `perm` on `state` (Montgomery words) and returns the first eight
-/// output words (the digest the hash suites read) plus the gate counts.
-fn run(perm: fn(&mut Ctx, &mut [BigIntWires]), state: &[u32]) -> ([u32; 8], u64, u64) {
+/// Runs `perm` on `state` (Montgomery words) and returns output words
+/// `8 * window..8 * window + 8` plus the gate counts. The output type holds
+/// eight words, so the full state is checked over several windows.
+fn run(
+    perm: fn(&mut Ctx, &mut [BigIntWires]),
+    state: &[u32],
+    window: usize,
+) -> ([u32; 8], u64, u64) {
     fn go<const N: usize>(
         perm: fn(&mut Ctx, &mut [BigIntWires]),
         state: &[u32],
+        window: usize,
     ) -> ([u32; 8], u64, u64) {
         let mut msg = [0u8; N];
         for (i, v) in state.iter().enumerate() {
@@ -272,7 +278,10 @@ fn run(perm: fn(&mut Ctx, &mut [BigIntWires]), state: &[u32]) -> ([u32; 8], u64,
                 let mut cells: Vec<BigIntWires> =
                     (0..n).map(|i| word(&input.byte_arr, 4 * i, W)).collect();
                 perm(ctx, &mut cells);
-                let bits: Vec<_> = cells[..8].iter().flat_map(|w| w.bits.clone()).collect();
+                let bits: Vec<_> = cells[8 * window..8 * window + 8]
+                    .iter()
+                    .flat_map(|w| w.bits.clone())
+                    .collect();
                 pack_output(&bits)
             },
         );
@@ -287,10 +296,35 @@ fn run(perm: fn(&mut Ctx, &mut [BigIntWires]), state: &[u32]) -> ([u32; 8], u64,
         )
     }
     match state.len() {
-        24 => go::<96>(perm, state),
-        16 => go::<64>(perm, state),
+        24 => go::<96>(perm, state, window),
+        16 => go::<64>(perm, state, window),
         _ => unreachable!(),
     }
+}
+
+/// Runs the permutation once per eight-word window, checks every output lane
+/// against `expected`, and checks the gate counts agree across windows.
+fn check(
+    perm: fn(&mut Ctx, &mut [BigIntWires]),
+    state: &[u32],
+    expected: &[u32],
+    validated_against: &'static str,
+) -> Gadget {
+    let mut counts = None;
+    for window in 0..state.len() / 8 {
+        let (got, nonfree, total) = run(perm, state, window);
+        assert_eq!(
+            got,
+            expected[8 * window..8 * window + 8],
+            "{validated_against} mismatch"
+        );
+        if let Some(c) = counts {
+            assert_eq!(c, (nonfree, total));
+        }
+        counts = Some((nonfree, total));
+    }
+    let (nonfree, total) = counts.unwrap();
+    Gadget::new(nonfree, total, validated_against)
 }
 
 fn states(width: usize) -> Vec<Vec<u32>> {
@@ -316,10 +350,13 @@ pub fn measure() -> BTreeMap<&'static str, Gadget> {
         let mut native: [BabyBearElem; CELLS] =
             core::array::from_fn(|i| BabyBearElem::new_raw(state[i]));
         poseidon2_mix(&mut native);
-        let expected: [u32; 8] = core::array::from_fn(|i| native[i].as_u32_montgomery());
-        let (got, nonfree, total) = run(risc0_permutation, &state);
-        assert_eq!(got, expected, "risc0 poseidon2 mismatch");
-        let g = Gadget::new(nonfree, total, "risc0-zkp poseidon2_mix");
+        let expected: Vec<u32> = native.iter().map(|v| v.as_u32_montgomery()).collect();
+        let g = check(
+            risc0_permutation,
+            &state,
+            &expected,
+            "risc0-zkp poseidon2_mix",
+        );
         if let Some(prev) = &last {
             assert_eq!((prev.nonfree, prev.total), (g.nonfree, g.total));
         }
@@ -334,13 +371,15 @@ pub fn measure() -> BTreeMap<&'static str, Gadget> {
         let native: [slop_koala_bear::KoalaBear; KW] =
             core::array::from_fn(|i| slop_koala_bear::KoalaBear::from_canonical_u32(state[i]));
         let native = perm.permute(native);
-        let expected: [u32; 8] = core::array::from_fn(|i| kb_monty(native[i].as_canonical_u32()));
+        let expected: Vec<u32> = native
+            .iter()
+            .map(|v| kb_monty(v.as_canonical_u32()))
+            .collect();
         let monty: Vec<u32> = state.iter().map(|v| kb_monty(*v)).collect();
-        let (got, nonfree, total) = run(sp1_permutation, &monty);
-        assert_eq!(got, expected, "sp1 poseidon2 mismatch");
-        let g = Gadget::new(
-            nonfree,
-            total,
+        let g = check(
+            sp1_permutation,
+            &monty,
+            &expected,
             "slop-koala-bear my_kb_16_perm (sp1-primitives poseidon2_init)",
         );
         if let Some(prev) = &last {

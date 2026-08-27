@@ -1,6 +1,8 @@
 {
-  "proof_bytes": 545896,
+  "proof_bytes": 545960,
   "components": {
-    "leaf_circuit_proof": 545896
+    "circuit_hash": 32,
+    "leaf_circuit_proof": 545896,
+    "preprocessed_root": 32
   }
 }

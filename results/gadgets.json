@@ -1,0 +1,136 @@
+{
+  "source": {
+    "crate": "g16ckt",
+    "repository": "https://github.com/alpenlabs/g16",
+    "rev": "f78c01da1ec9138b6c3a1c872405c1eefbaca48e"
+  },
+  "cost_model": "free-XOR garbling; nonfree = AND-type gates, xor = XOR/XNOR gates",
+  "gadgets": {
+    "babybear_add": {
+      "nonfree": 128,
+      "xor": 375,
+      "total": 503,
+      "validated_against": "risc0-core baby_bear::mul/add/sub (u32 reference restated here)"
+    },
+    "babybear_mul": {
+      "nonfree": 2091,
+      "xor": 4837,
+      "total": 6928,
+      "validated_against": "risc0-core baby_bear::mul/add/sub (u32 reference restated here)"
+    },
+    "babybear_sub": {
+      "nonfree": 96,
+      "xor": 250,
+      "total": 346,
+      "validated_against": "risc0-core baby_bear::mul/add/sub (u32 reference restated here)"
+    },
+    "blake2s_compression_64b": {
+      "nonfree": 15360,
+      "xor": 72192,
+      "total": 87552,
+      "validated_against": "blake2 crate"
+    },
+    "blake3_compression_64b": {
+      "nonfree": 10848,
+      "xor": 50688,
+      "total": 61536,
+      "validated_against": "blake3 crate"
+    },
+    "groth16_bn254_verify_1_input": {
+      "nonfree": 2758905493,
+      "xor": 7710285369,
+      "total": 10469190862,
+      "validated_against": "arkworks Groth16 proof accepted by the in-circuit verifier"
+    },
+    "groth16_bn254_verify_compressed_1_input": {
+      "nonfree": 2955935125,
+      "xor": 8291127626,
+      "total": 11247062751,
+      "validated_against": "arkworks Groth16 proof accepted by the in-circuit verifier"
+    },
+    "karatsuba_31x31": {
+      "nonfree": 1702,
+      "xor": 3566,
+      "total": 5268,
+      "validated_against": "low 32 bits of the native product"
+    },
+    "koalabear_add": {
+      "nonfree": 128,
+      "xor": 375,
+      "total": 503,
+      "validated_against": "p3-koala-bear monty_reduce/add/sub (u32 reference restated here)"
+    },
+    "koalabear_mul": {
+      "nonfree": 2190,
+      "xor": 5224,
+      "total": 7414,
+      "validated_against": "p3-koala-bear monty_reduce/add/sub (u32 reference restated here)"
+    },
+    "koalabear_sub": {
+      "nonfree": 96,
+      "xor": 250,
+      "total": 346,
+      "validated_against": "p3-koala-bear monty_reduce/add/sub (u32 reference restated here)"
+    },
+    "m31_add": {
+      "nonfree": 127,
+      "xor": 371,
+      "total": 498,
+      "validated_against": "stwo M31::reduce / partial_reduce (u64 reference restated here)"
+    },
+    "m31_mul": {
+      "nonfree": 1860,
+      "xor": 4058,
+      "total": 5918,
+      "validated_against": "stwo M31::reduce / partial_reduce (u64 reference restated here)"
+    },
+    "m31_sub": {
+      "nonfree": 160,
+      "xor": 500,
+      "total": 660,
+      "validated_against": "stwo M31::reduce / partial_reduce (u64 reference restated here)"
+    },
+    "poseidon2_babybear_w24_permutation": {
+      "nonfree": 2483436,
+      "xor": 6504708,
+      "total": 8988144,
+      "validated_against": "risc0-zkp poseidon2_mix"
+    },
+    "poseidon2_koalabear_w16_permutation": {
+      "nonfree": 926448,
+      "xor": 2494724,
+      "total": 3421172,
+      "validated_against": "slop-koala-bear my_kb_16_perm (sp1-primitives poseidon2_init)"
+    },
+    "qm31_add": {
+      "nonfree": 508,
+      "xor": 1484,
+      "total": 1992,
+      "validated_against": "M31/CM31/QM31 arithmetic restated natively over u64"
+    },
+    "qm31_mul_karatsuba": {
+      "nonfree": 20885,
+      "xor": 49087,
+      "total": 69972,
+      "validated_against": "M31/CM31/QM31 arithmetic restated natively over u64"
+    },
+    "qm31_mul_schoolbook": {
+      "nonfree": 39143,
+      "xor": 86999,
+      "total": 126142,
+      "validated_against": "M31/CM31/QM31 arithmetic restated natively over u64"
+    },
+    "qm31_pointwise_mul": {
+      "nonfree": 7440,
+      "xor": 16232,
+      "total": 23672,
+      "validated_against": "M31/CM31/QM31 arithmetic restated natively over u64"
+    },
+    "qm31_sub": {
+      "nonfree": 640,
+      "xor": 2000,
+      "total": 2640,
+      "validated_against": "M31/CM31/QM31 arithmetic restated natively over u64"
+    }
+  }
+}
