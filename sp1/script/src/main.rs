@@ -9,7 +9,7 @@
 //!
 //! Guests: trivial, fib, journal.
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use p3_field::counters as c;
 use p3_field::PrimeField32;
 use serde::Serialize;
@@ -17,21 +17,27 @@ use sp1_primitives::fri_params::{recursion_fri_config, SP1_TARGET_BITS_OF_SECURI
 use sp1_primitives::{SP1ExtensionField, SP1Field};
 use sp1_sdk::blocking::{LightProver, ProveRequest, Prover, ProverClient};
 use sp1_sdk::prover::ProvingKey;
-use sp1_sdk::{
-    include_elf, Elf, HashableKey, SP1Proof, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey,
-};
+use sp1_sdk::{Elf, HashableKey, SP1Proof, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey};
 
 /// Shard size (cycles) used when proving `fib`; the default is 2^24, which
 /// would fit it in one shard.
 const FIB_SHARD_SIZE: u64 = 1 << 22;
 
+/// Reads the guest ELF that `build.rs` (sp1-build) compiles into the guest's
+/// target directory. It is read at run time rather than embedded with
+/// `include_elf!` so that the script compiles without the guest toolchain
+/// (`SP1_SKIP_PROGRAM_BUILD=true`), which is how `size`, `count` and `params`
+/// run in CI.
 fn elf(name: &str) -> Result<Elf> {
-    Ok(match name {
-        "trivial" => include_elf!("trivial"),
-        "fib" => include_elf!("fib"),
-        "journal" => include_elf!("journal"),
-        _ => bail!("unknown guest {name}"),
-    })
+    if !["trivial", "fib", "journal"].contains(&name) {
+        bail!("unknown guest {name}");
+    }
+    let path = format!(
+        "../programs/{name}/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/{name}"
+    );
+    let bytes = std::fs::read(&path)
+        .with_context(|| format!("reading guest ELF {path} (build the guests with `cargo prove build` or without SP1_SKIP_PROGRAM_BUILD)"))?;
+    Ok(Elf::from(bytes))
 }
 
 fn paths(name: &str) -> (String, String) {
