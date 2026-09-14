@@ -261,7 +261,7 @@ MARK_END = "<!-- gates.py: table end -->"
 
 
 def fmt_bytes(n):
-    return f"{n} B" if n < 1024 else f"{n / 1024:,.1f} KB" if n < 1024**2 else f"{n / 1024**2:,.2f} MB"
+    return f"{n} B" if n < 1024 else f"{n / 1024:,.1f} KiB" if n < 1024**2 else f"{n / 1024**2:,.2f} MiB"
 
 
 def render_table(rows, baseline):
