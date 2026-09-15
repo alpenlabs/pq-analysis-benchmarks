@@ -11,3 +11,5 @@ p3-challenger = { path = "patched/p3-challenger" }
 p3-field = { path = "patched/p3-field" }
 p3-koala-bear = { path = "patched/p3-koala-bear" }
 p3-symmetric = { path = "patched/p3-symmetric" }
+# Makes `ShrinkProver::{prove, verify}` reachable; see patch.sh and patches/.
+sp1-prover = { path = "patched/sp1-prover" }

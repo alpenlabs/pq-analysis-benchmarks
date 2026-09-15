@@ -69,7 +69,7 @@ jobs:
           done
       
   sp1:
-    name: SP1 compressed proof
+    name: SP1 compressed and shrink proofs
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -92,7 +92,7 @@ jobs:
       - name: Install protoc (sp1-prover-types build script)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev
 
-      - name: Apply Plonky3 patches
+      - name: Apply Plonky3 and sp1-prover patches
         run: ./sp1/patch.sh
 
       - name: size
@@ -118,6 +118,19 @@ jobs:
           for g in trivial fib journal; do
             cargo run --release --locked -- params "$g" "params-$g.json"
             diff "params-$g.json" ../results/sp1/params.json
+          done
+
+      - name: shrink
+        working-directory: sp1
+        run: |
+          for g in trivial fib journal; do
+            cargo run --release --locked -- shrink-size "$g" "shrink-size-$g.json" | tee "shrink-size-$g.txt"
+            grep -q '^  891094  shard proof total$' "shrink-size-$g.txt"
+            diff "shrink-size-$g.json" ../results/sp1/shrink/size.json
+            cargo run --release --locked -- shrink-count "$g" "shrink-count-$g.json"
+            diff "shrink-count-$g.json" ../results/sp1/shrink/ops.json
+            cargo run --release --locked -- shrink-params "$g" "shrink-params-$g.json"
+            diff "shrink-params-$g.json" ../results/sp1/shrink/params.json
           done
 
   stwo:

@@ -1,0 +1,8 @@
+{
+  "proof_bytes": 891034,
+  "components": {
+    "shard_proof_without_public_values": 890338,
+    "shrink_vk": 104,
+    "vk_merkle_proof": 592
+  }
+}

@@ -170,6 +170,7 @@
       "system": "risc0",
       "version": "3.0.5",
       "artifact": "succinct receipt",
+      "availability": "shipped",
       "proof_bytes": 222968,
       "hash": "poseidon2-babybear",
       "hash_units": 5693,
@@ -214,6 +215,7 @@
       "system": "sp1",
       "version": "6.3.1",
       "artifact": "compressed proof",
+      "availability": "shipped",
       "proof_bytes": 1271786,
       "hash": "poseidon2-koalabear",
       "hash_units": 39589,
@@ -255,9 +257,55 @@
       "note": "hash_priced_from_ops is the same hash priced per counted field operation, for comparison with the measured permutation gadget"
     },
     {
+      "system": "sp1",
+      "version": "6.3.1",
+      "artifact": "shrink proof",
+      "availability": "unexposed",
+      "proof_bytes": 891034,
+      "hash": "poseidon2-koalabear",
+      "hash_units": 27734,
+      "residual_field": 2499593428,
+      "residual_field_xor": 6024293092,
+      "hash_as_deployed": 25694108832,
+      "hash_as_deployed_xor": 69188675416,
+      "total_as_deployed": 28193702260,
+      "total_with": {
+        "blake3": 2800451860,
+        "blake2s": 2925587668,
+        "poseidon2-babybear-w24": 71375207452,
+        "poseidon2-koalabear-w16": 28193702260
+      },
+      "total_with_xor": {
+        "blake3": 7430074084,
+        "blake2s": 8026466020,
+        "poseidon2-babybear-w24": 186425864764,
+        "poseidon2-koalabear-w16": 75212968508
+      },
+      "hash_priced_from_ops": 20985097504,
+      "poseidon2": {
+        "composition": {
+          "width": 16,
+          "sbox": 3,
+          "rounds_full": 8,
+          "rounds_partial": 20,
+          "general": 296,
+          "const_arbitrary": 0,
+          "const_pow2": 0,
+          "add": 832,
+          "sub": 20
+        },
+        "per_permutation": {
+          "measured": 926448,
+          "priced_from_ops": 756656
+        }
+      },
+      "note": "hash_priced_from_ops is the same hash priced per counted field operation, for comparison with the measured permutation gadget"
+    },
+    {
       "system": "stwo",
       "version": "starkware-libs/proving@49f8e037",
       "artifact": "leaf circuit proof",
+      "availability": "shipped",
       "proof_bytes": 545960,
       "hash": "blake2s",
       "hash_units": 15332,

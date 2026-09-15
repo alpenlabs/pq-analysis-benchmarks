@@ -93,6 +93,12 @@ check: patch-risc0 patch-sp1
         diff "count-$g.json" ../results/sp1/ops.json
         SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- params "$g" "params-$g.json"
         diff "params-$g.json" ../results/sp1/params.json
+        SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- shrink-size "$g" "shrink-size-$g.json"
+        diff "shrink-size-$g.json" ../results/sp1/shrink/size.json
+        SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- shrink-count "$g" "shrink-count-$g.json"
+        diff "shrink-count-$g.json" ../results/sp1/shrink/ops.json
+        SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- shrink-params "$g" "shrink-params-$g.json"
+        diff "shrink-params-$g.json" ../results/sp1/shrink/params.json
     done
     cd ../stwo
     for g in trivial fib journal; do
@@ -144,6 +150,19 @@ prove-sp1: patch-sp1
     cd sp1
     for g in trivial fib journal; do
         cargo run --release -- prove "$g"
+    done
+
+# Take the committed SP1 compressed proofs through the shrink stage and write
+# artifacts/sp1/<guest>.shrink.bin and artifacts/sp1/shrink.vk. Needs a prover
+# but not a guest toolchain: it reads the committed proofs, so it can be re-run
+# without re-proving.
+[group('prove')]
+shrink-sp1: patch-sp1
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd sp1
+    for g in trivial fib journal; do
+        SP1_SKIP_PROGRAM_BUILD=true cargo run --release -- shrink "$g"
     done
 
 # Prove the Stwo guests and write artifacts/stwo/<guest>.bin

@@ -3108,9 +3108,12 @@ dependencies = [
  "serde",
  "serde_json",
  "sp1-build",
+ "sp1-hypercube",
  "sp1-primitives",
+ "sp1-prover",
  "sp1-sdk",
  "sp1-verifier",
+ "tokio",
 ]
 
 [[package]]
@@ -4040,8 +4043,6 @@ dependencies = [
 [[package]]
 name = "sp1-prover"
 version = "6.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee3b14f599150ddbd3d3829ec4080dc9e10d6dac66e9741260d5a5a116fbcb02"
 dependencies = [
  "anyhow",
  "bincode",
