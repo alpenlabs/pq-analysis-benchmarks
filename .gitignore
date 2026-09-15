@@ -4,4 +4,7 @@ risc0/patched/
 sp1/patched/
 size-*.json
 params-*.json
+shrink-size-*.json
+shrink-count-*.json
+shrink-params-*.json
 /gadgets/gadgets.json

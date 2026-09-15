@@ -160,12 +160,21 @@ SWAPS = {
 }
 
 
+# The artifact each system's own API hands back. Anything else in a ledger's
+# `artifact` field is a stage the prover computes but does not return.
+SHIPPED = {"succinct receipt", "compressed proof", "leaf circuit proof"}
+
+
 def row(ledger, path, hash_units, residual, residual_xor, hash_native, hash_native_xor, extra):
     size = json.load(open(path.replace("ops.json", "size.json")))
     return {
         "system": ledger["system"],
         "version": ledger["version"],
         "artifact": ledger["artifact"],
+        # How the artifact is obtained; see the README footnotes. "shipped" is
+        # what the system's own API returns, "unexposed" is produced by the
+        # unmodified prover but not returned by it.
+        "availability": "shipped" if ledger["artifact"] in SHIPPED else "unexposed",
         "proof_bytes": size["proof_bytes"],
         "hash": ledger["hash"]["function"],
         "hash_units": hash_units,
@@ -266,7 +275,11 @@ def fmt_bytes(n):
 
 def render_table(rows, baseline):
     """Markdown table for the README: each system as deployed and with BLAKE3,
-    alphabetical, then the compressed-proof Groth16 verifier as baseline."""
+    alphabetical, then the compressed-proof Groth16 verifier as baseline.
+
+    A row's name carries a dagger when the artifact is one the prover computes
+    but its API does not return (SP1's shrink proof), and a double dagger when
+    the hash has been swapped, which no released prover does."""
     ref = next(r for r in baseline if r["gadget"].endswith("compressed_1_input"))
     lines = [
         "| verifier | hash | proof size | nonfree gates\\* (billions) | total gates\\* (billions) | nonfree vs. groth16 |",
@@ -279,11 +292,17 @@ def render_table(rows, baseline):
             f"{nf / ref['nonfree']:.2f}x |"
         )
 
-    for r in rows:
-        nf, x = r["total_as_deployed"], r["residual_field_xor"] + r["hash_as_deployed_xor"]
-        line(f"{r['system']} {r['version'].split('@')[-1]}", r["hash"], r["proof_bytes"], nf, x)
-        nf, x = r["total_with"]["blake3"], r["total_with_xor"]["blake3"]
-        line(f"{r['system']}, blake3 swap", "blake3", r["proof_bytes"], nf, x)
+    def stage(r):
+        return "" if r["availability"] == "shipped" else f", {r['artifact'].split()[0]}\u2020"
+
+    for system in dict.fromkeys(r["system"] for r in rows):
+        group = [r for r in rows if r["system"] == system]
+        for r in group:
+            nf, x = r["total_as_deployed"], r["residual_field_xor"] + r["hash_as_deployed_xor"]
+            line(f"{system} {r['version'].split('@')[-1]}{stage(r)}", r["hash"], r["proof_bytes"], nf, x)
+        for r in group:
+            nf, x = r["total_with"]["blake3"], r["total_with_xor"]["blake3"]
+            line(f"{system}{stage(r)}, blake3 swap\u2021", "blake3", r["proof_bytes"], nf, x)
     line("groth16 bn254 (baseline)", "-", ref["proof_bytes"], ref["nonfree"], ref["xor"])
     lines += [
         "",
@@ -294,11 +313,25 @@ def render_table(rows, baseline):
         "costs would raise the as-deployed figures by well under 1% for Risc0 and SP1 and",
         "by an estimated 1-2% for Stwo, and the Risc0 BLAKE3-swap figure by about 5%.",
         "The Groth16 row is the complete verifier circuit.",
+        "",
+        "\u2020 Produced by the unmodified prover but not returned by its API, so it is",
+        "reachable only by calling into the prover directly (see [Shrink](#shrink)).",
+        "Every other STARK row is the artifact its system's own API hands back.",
+        "",
+        "\u2021 Assumes a fork of prover and verifier that does not exist: the hash is",
+        "replaced one-for-one and the field arithmetic left unchanged.",
     ]
     return "\n".join(lines)
 
 
-PARAMS = {s: json.load(open(f"results/{s}/params.json")) for s in ("risc0", "sp1", "stwo")}
+# (path, stage suffix for the row label); one entry per parameter set.
+PARAM_SETS = [
+    ("results/risc0/params.json", ""),
+    ("results/sp1/params.json", ""),
+    ("results/sp1/shrink/params.json", ", shrink"),
+    ("results/stwo/params.json", ""),
+]
+PARAMS = [(json.load(open(path)), suffix) for path, suffix in PARAM_SETS]
 
 
 def render_params():
@@ -308,12 +341,12 @@ def render_params():
         "| verifier | field | rate | queries | fold | PoW bits | trace log size | stated security |",
         "|---|---|---:|---:|---:|---:|---:|---|",
     ]
-    for name, p in PARAMS.items():
+    for p, suffix in PARAMS:
         f, fri, sec = p["field"], p["fri"], p["security"]
         trace = p.get("trace_log_size", p.get("log_stacking_height"))
         basis = sec["basis"].split(":")[0].split(";")[0]
         lines.append(
-            f"| {name} {p['version'].split('@')[-1]} | {f['base']}^{f['extension_degree']} | "
+            f"| {p['system']} {p['version'].split('@')[-1]}{suffix} | {f['base']}^{f['extension_degree']} | "
             f"1/{2 ** fri['log_blowup']} | {fri['queries']} | {2 ** fri['log_fold']} | {fri['pow_bits']} | "
             f"{trace} | {sec['stated_bits']} bits, {basis} |"
         )
@@ -337,6 +370,7 @@ def main(out):
     rows = [
         poseidon2_system("risc0", "results/risc0/ops.json"),
         poseidon2_system("sp1", "results/sp1/ops.json"),
+        poseidon2_system("sp1", "results/sp1/shrink/ops.json"),
         stwo_system("results/stwo/ops.json"),
     ]
     baseline = groth16_rows()
@@ -360,9 +394,10 @@ def main(out):
     print("Nonfree gates per verification. 'field' is the non-hash arithmetic; 'as deployed' adds the shipped hash;")
     print("the remaining columns replace each hash unit with one unit of the named hash.")
     swaps = list(SWAPS)
-    print(f"{'':8s}{'units':>7s}{'field':>15s}{'as deployed':>15s}" + "".join(f"{k:>24s}" for k in swaps))
+    print(f"{'':12s}{'units':>7s}{'field':>15s}{'as deployed':>15s}" + "".join(f"{k:>24s}" for k in swaps))
     for r in rows:
-        line = f"{r['system']:8s}{r['hash_units']:>7d}{r['residual_field']:>15,d}{r['total_as_deployed']:>15,d}"
+        name = r["system"] if r["availability"] == "shipped" else f"{r['system']} {r['artifact'].split()[0]}"
+        line = f"{name:12s}{r['hash_units']:>7d}{r['residual_field']:>15,d}{r['total_as_deployed']:>15,d}"
         print(line + "".join(f"{r['total_with'][k]:>24,d}" for k in swaps))
     print()
     for r in baseline:
@@ -373,14 +408,15 @@ def main(out):
         print(f"{k:26s}{v['nonfree']:>12,d}")
     print()
     print("Poseidon2 permutation, measured gadget vs the counted field operations priced per operation:")
-    for r in rows[:2]:
+    for r in (r for r in rows if "poseidon2" in r):
         pp, c = r["poseidon2"]["per_permutation"], r["poseidon2"]["composition"]
         print(
-            f"{r['system']:8s} muls {c['general']} general + {c['const_arbitrary']} arbitrary-constant + "
+            f"{r['system']:8s} {r['artifact']:18s} muls {c['general']} general + {c['const_arbitrary']} arbitrary-constant + "
             f"{c['const_pow2']} power-of-two, adds {c['add']}, subs {c['sub']}: "
             f"measured {pp['measured']:,d}  priced_from_ops {pp['priced_from_ops']:,d}"
         )
-    print(f"stwo residual with stwo's schoolbook QM31 mul instead of Karatsuba: {rows[2]['residual_field_with_schoolbook_mul']:,d}")
+    stwo = next(r for r in rows if "residual_field_with_schoolbook_mul" in r)
+    print(f"stwo residual with stwo's schoolbook QM31 mul instead of Karatsuba: {stwo['residual_field_with_schoolbook_mul']:,d}")
 
 
 if __name__ == "__main__":

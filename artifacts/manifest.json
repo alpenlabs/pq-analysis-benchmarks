@@ -17,6 +17,9 @@
     "journal": {
       "vk_hash": "0x008de5d5b85912de1f6e7e2af60f7228f43d1f44d0e527a71086992dd0770fa4"
     },
+    "shrink": {
+      "vk_hash": "0x00dbb9eaef1bb05d6c9a13886b465988d842b4781741d38017b354f7108292ac"
+    },
     "trivial": {
       "vk_hash": "0x005fa896233906048c527a4c3dead1e43f4d78e3069da43603830ea67e40a957"
     }

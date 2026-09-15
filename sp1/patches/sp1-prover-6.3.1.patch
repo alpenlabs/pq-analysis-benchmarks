@@ -1,0 +1,20 @@
+--- a/src/worker/prover/recursion.rs
++++ b/src/worker/prover/recursion.rs
+@@ -1078,7 +1078,7 @@
+         self.prover.setup(program, self.permits.clone()).await.1
+     }
+ 
+-    async fn prove(
++    pub async fn prove(
+         &self,
+         compressed_proof: SP1RecursionProof<SP1GlobalContext, SP1PcsProofInner>,
+     ) -> Result<SP1RecursionProof<SP1GlobalContext, SP1PcsProofInner>, TaskError> {
+@@ -1122,7 +1122,7 @@
+         Ok(SP1RecursionProof { vk: self.verifying_key.clone(), proof, vk_merkle_proof })
+     }
+ 
+-    fn verify(
++    pub fn verify(
+         &self,
+         shrink_proof: &SP1RecursionProof<SP1GlobalContext, SP1PcsProofInner>,
+     ) -> Result<(), TaskError> {

@@ -7,17 +7,32 @@
 //!                  write the operation ledger as JSON (default
 //!                  `results/sp1/ops.json`; it is the same for every guest).
 //!
+//! `shrink <guest>`: take the committed compressed proof through SP1's shrink
+//!                  stage and write the result to `artifacts/sp1/<guest>.shrink.bin`
+//!                  and the shrink verifying key to `artifacts/sp1/shrink.vk`.
+//!                  Needs a prover; the other shrink commands read what it wrote.
+//! `shrink-size`, `shrink-count`, `shrink-params <guest> [out]`: the same three
+//!                  measurements for the shrink proof, into
+//!                  `results/sp1/shrink/{size,ops,params}.json`.
+//!
 //! Guests: trivial, fib, journal.
 
 use anyhow::{bail, Context, Result};
 use p3_field::counters as c;
 use p3_field::PrimeField32;
 use serde::Serialize;
-use sp1_primitives::fri_params::{recursion_fri_config, SP1_TARGET_BITS_OF_SECURITY};
-use sp1_primitives::{SP1ExtensionField, SP1Field};
+use sp1_hypercube::{MachineVerifyingKey, SP1PcsProofInner, SP1RecursionProof};
+use sp1_primitives::fri_params::{
+    recursion_fri_config, shrink_fri_config, SP1_SHRINK_WRAP_POW_BITS, SP1_TARGET_BITS_OF_SECURITY,
+};
+use sp1_primitives::{SP1ExtensionField, SP1Field, SP1GlobalContext};
+use sp1_prover::verify::SP1Verifier;
+use sp1_prover::worker::cpu_worker_builder;
+use sp1_prover::{SHRINK_LOG_STACKING_HEIGHT, SHRINK_MAX_LOG_ROW_COUNT};
 use sp1_sdk::blocking::{LightProver, ProveRequest, Prover, ProverClient};
 use sp1_sdk::prover::ProvingKey;
 use sp1_sdk::{Elf, HashableKey, SP1Proof, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey};
+use sp1_verifier::VerifierRecursionVks;
 
 /// Shard size (cycles) used when proving `fib`; the default is 2^24, which
 /// would fit it in one shard.
@@ -56,20 +71,31 @@ fn read_artifact(name: &str) -> Result<(SP1ProofWithPublicValues, SP1VerifyingKe
     Ok((proof, vk))
 }
 
+/// Checks a verifying key's hash against the `sp1/<key>/vk_hash` entry of
+/// `artifacts/manifest.json`.
+fn check_manifest_hash(key: &str, hash: String) -> Result<()> {
+    let manifest: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(MANIFEST)?)?;
+    let expected = manifest["sp1"][key]["vk_hash"].as_str().ok_or_else(|| {
+        anyhow::anyhow!("no sp1/{key} entry in {MANIFEST}; the committed vk hashes to {hash}")
+    })?;
+    if hash != expected {
+        bail!("sp1/{key}: vk hash {hash} != manifest {expected}");
+    }
+    Ok(())
+}
+
 /// Checks the committed verifying key's hash against `artifacts/manifest.json`
 /// (written by `prove`).
 fn check_manifest(name: &str, vk: &SP1VerifyingKey) -> Result<()> {
-    let manifest: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(MANIFEST)?)?;
-    let expected = manifest["sp1"][name]["vk_hash"].as_str().ok_or_else(|| {
-        anyhow::anyhow!(
-            "no sp1/{name} entry in {MANIFEST}; the committed vk hashes to {}",
-            vk.bytes32()
-        )
-    })?;
-    if vk.bytes32() != expected {
-        bail!("{name}.vk: vk hash {} != manifest {expected}", vk.bytes32());
-    }
-    Ok(())
+    check_manifest_hash(name, vk.bytes32())
+}
+
+/// Checks the committed shrink verifying key against `artifacts/manifest.json`
+/// (written by `shrink`). The key is also pinned by SP1 itself: `verify_shrink`
+/// checks its membership in the recursion vk tree whose root `sp1-verifier`
+/// ships. This catches a swapped file first, with a clearer error.
+fn check_shrink_manifest(vk: &MachineVerifyingKey<SP1GlobalContext>) -> Result<()> {
+    check_manifest_hash("shrink", vk.bytes32())
 }
 
 /// Loads the committed proof and verifying key of `name`, verifies the proof
@@ -255,14 +281,19 @@ fn load(a: &std::sync::atomic::AtomicU64) -> u64 {
     a.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-fn count(name: &str, out: &str) -> Result<()> {
-    let (proof, vk) = read_artifact(name)?;
+/// Runs `verify` between counter snapshots and writes the resulting operation
+/// ledger to `out`. `artifact` names what was verified.
+fn count_verify(
+    artifact: &'static str,
+    out: &str,
+    verify: impl FnOnce() -> Result<()>,
+) -> Result<()> {
     // Parallel reductions combine partial sums with extra additions whose
     // number depends on how rayon splits the work; one thread makes the
     // count deterministic and equal to the sequential verifier's.
     std::env::set_var("RAYON_NUM_THREADS", "1");
     let before = [&c::MUL, &c::ADD, &c::SUB].map(load);
-    LightProver::new().verify(&proof, &vk, None)?;
+    verify()?;
     let d = |i: usize, a: &std::sync::atomic::AtomicU64| load(a) - before[i];
     let total = Ops {
         mul: d(0, &c::MUL),
@@ -289,7 +320,7 @@ fn count(name: &str, out: &str) -> Result<()> {
     let ledger = Ledger {
         system: "sp1",
         version: lock_version("sp1-sdk"),
-        artifact: "compressed proof",
+        artifact,
         hash: Hash {
             function: "poseidon2-koalabear",
             permutations: Perms { ..perms },
@@ -312,11 +343,8 @@ fn count(name: &str, out: &str) -> Result<()> {
     };
     let json = serde_json::to_string_pretty(&ledger)?;
     std::fs::write(out, format!("{json}\n"))?;
-    // Hashing the vk uses the counted permutation, so the manifest check
-    // runs after the ledger is read.
-    check_manifest(name, &vk)?;
     let p = &ledger.hash.permutations;
-    println!("guest = {name}, poseidon2 permutations = {}", p.total);
+    println!("{artifact}: poseidon2 permutations = {}", p.total);
     for (name, n) in [
         (
             "truncated_permutation_compress",
@@ -339,6 +367,224 @@ fn count(name: &str, out: &str) -> Result<()> {
         "  (+ {} mul, {} add, {} sub inside {} pow calls, exponent-dependent, not in the ledger)",
         in_pow.mul, in_pow.add, in_pow.sub, f.pow.calls
     );
+    Ok(())
+}
+
+fn count(name: &str, out: &str) -> Result<()> {
+    let (proof, vk) = read_artifact(name)?;
+    count_verify("compressed proof", out, || {
+        LightProver::new().verify(&proof, &vk, None)?;
+        Ok(())
+    })?;
+    // Hashing the vk uses the counted permutation, so the manifest check
+    // runs after the ledger is read.
+    check_manifest(name, &vk)
+}
+
+/// The shrink proof: an `SP1RecursionProof` in the same shape as the
+/// compressed proof, but produced by and verified against the shrink machine.
+type ShrinkProof = SP1RecursionProof<SP1GlobalContext, SP1PcsProofInner>;
+
+/// The shrink verifying key. It is a constant of the proof system (SP1 fixes
+/// the shrink program), but unlike the wrap key SP1 does not ship it as a
+/// released artifact, so `shrink` writes out the one its prover derives.
+const SHRINK_VK: &str = "../artifacts/sp1/shrink.vk";
+
+fn shrink_path(name: &str) -> String {
+    format!("../artifacts/sp1/{name}.shrink.bin")
+}
+
+/// Takes the committed compressed proof of `name` through SP1's shrink stage
+/// and writes the result next to it.
+///
+/// Shrink is the recursion step between the compressed proof and the wrap
+/// proof: it verifies the compressed proof inside a smaller recursion machine
+/// (`RecursionAir::shrink_machine`) at a higher FRI blowup, and is the last
+/// stage still over KoalaBear. `sp1-prover` runs it inside `run_shrink_wrap`
+/// and immediately consumes it with the wrap prover, so neither the SDK nor
+/// the worker API hands it back; `patches/sp1-prover-6.3.1.patch` only widens
+/// `ShrinkProver::{prove, verify}` to `pub` so it can be called directly.
+fn shrink(name: &str) -> Result<()> {
+    let (proof, _vk) = load_artifact(name)?;
+    let compressed = match proof.proof {
+        SP1Proof::Compressed(p) => *p,
+        _ => bail!("expected a compressed proof"),
+    };
+    let runtime = tokio::runtime::Runtime::new()?;
+    let (shrink_proof, shrink_vk) = runtime.block_on(async move {
+        let worker = cpu_worker_builder().build().await?;
+        let prover = worker
+            .prover_engine()
+            .recursion_prover
+            .shrink_prover
+            .clone();
+        let shrink_proof = prover
+            .prove(compressed)
+            .await
+            .map_err(|e| anyhow::anyhow!("shrink prove failed: {e:?}"))?;
+        prover
+            .verify(&shrink_proof)
+            .map_err(|e| anyhow::anyhow!("shrink verify failed: {e:?}"))?;
+        anyhow::Ok((shrink_proof, prover.verifying_key.clone()))
+    })?;
+    let path = shrink_path(name);
+    std::fs::write(&path, bincode::serialize(&shrink_proof)?)?;
+    std::fs::write(SHRINK_VK, bincode::serialize(&shrink_vk)?)?;
+    let mut manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(MANIFEST)?)?;
+    manifest["sp1"]["shrink"]["vk_hash"] = shrink_vk.bytes32().into();
+    std::fs::write(
+        MANIFEST,
+        format!("{}\n", serde_json::to_string_pretty(&manifest)?),
+    )?;
+    println!(
+        "{name}: shrink proof written to {path} ({} bytes) and {SHRINK_VK}",
+        std::fs::metadata(&path)?.len()
+    );
+    Ok(())
+}
+
+fn read_shrink(name: &str) -> Result<(ShrinkProof, MachineVerifyingKey<SP1GlobalContext>)> {
+    let path = shrink_path(name);
+    let proof = bincode::deserialize(&std::fs::read(&path).with_context(|| {
+        format!("reading {path}; produce it with `cargo run --release -p script -- shrink {name}`")
+    })?)?;
+    let vk = bincode::deserialize(&std::fs::read(SHRINK_VK)?)?;
+    Ok((proof, vk))
+}
+
+/// Verifies a shrink proof the way `SP1Verifier` does: the shard proof against
+/// the shrink verifying key, the key's membership in the recursion vk tree,
+/// and the public values (digest, vk root, `is_complete`, and that the proof
+/// is for `vk`).
+fn verify_shrink(verifier: &SP1Verifier, proof: &ShrinkProof, vk: &SP1VerifyingKey) -> Result<()> {
+    verifier
+        .verify_shrink(proof, vk)
+        .map_err(|e| anyhow::anyhow!("shrink verification failed: {e:?}"))
+}
+
+fn shrink_verifier(shrink_vk: MachineVerifyingKey<SP1GlobalContext>) -> SP1Verifier {
+    let mut verifier = SP1Verifier::new(VerifierRecursionVks::default());
+    verifier.set_shrink_vk(shrink_vk);
+    verifier
+}
+
+fn shrink_size(name: &str, out: &str) -> Result<()> {
+    let (_proof, vk) = load_artifact(name)?;
+    let (p, shrink_vk) = read_shrink(name)?;
+    check_shrink_manifest(&shrink_vk)?;
+    verify_shrink(&shrink_verifier(shrink_vk), &p, &vk)?;
+    check_manifest(name, &vk)?;
+    let path = shrink_path(name);
+    let s = &p.proof;
+    let e = &s.evaluation_proof;
+    let b = &e.pcs_proof.basefold_proof;
+    let rows = [
+        ("shard proof: public_values", len(&s.public_values)?),
+        ("shard proof: main_commitment", len(&s.main_commitment)?),
+        ("shard proof: logup_gkr_proof", len(&s.logup_gkr_proof)?),
+        ("shard proof: zerocheck_proof", len(&s.zerocheck_proof)?),
+        ("shard proof: opened_values", len(&s.opened_values)?),
+        ("shard proof: evaluation_proof", len(e)?),
+        ("  pcs_proof (stacked BaseFold)", len(&e.pcs_proof)?),
+        ("    fri_commitments", len(&b.fri_commitments)?),
+        (
+            "    component query openings + paths",
+            len(&b.component_polynomials_query_openings_and_proofs)?,
+        ),
+        (
+            "    FRI query openings + paths",
+            len(&b.query_phase_openings_and_proofs)?,
+        ),
+        (
+            "    batch_evaluations",
+            len(&e.pcs_proof.batch_evaluations)?,
+        ),
+        ("  sumcheck_proof", len(&e.sumcheck_proof)?),
+        ("  jagged_eval_proof", len(&e.jagged_eval_proof)?),
+        ("shard proof total", len(s)?),
+        ("shrink vk (inside proof, constant)", len(&p.vk)?),
+        ("vk_merkle_proof (constant)", len(&p.vk_merkle_proof)?),
+        ("file total", std::fs::metadata(&path)?.len() as usize),
+    ];
+    println!("guest = {name}, artifact = shrink proof");
+    for (row, n) in rows {
+        println!("{n:>8}  {row}");
+    }
+    // Unlike the compressed proof, whose `vk` is whichever compress program
+    // shape the reduction ended on, the shrink proof's `vk` is the fixed
+    // shrink key and its Merkle proof is the fixed path to it, so a verifier
+    // can hold both as constants. They are listed separately for that reason.
+    let components = std::collections::BTreeMap::from([
+        (
+            "shard_proof_without_public_values",
+            len(s)? - len(&s.public_values)?,
+        ),
+        ("shrink_vk", len(&p.vk)?),
+        ("vk_merkle_proof", len(&p.vk_merkle_proof)?),
+    ]);
+    let size = Size {
+        proof_bytes: components.values().sum(),
+        components,
+    };
+    std::fs::write(out, format!("{}\n", serde_json::to_string_pretty(&size)?))?;
+    println!(
+        "{:>8}  proof without public inputs (written to {out})",
+        size.proof_bytes
+    );
+    Ok(())
+}
+
+fn shrink_count(name: &str, out: &str) -> Result<()> {
+    // `read_artifact`, not `load_artifact`: verifying the compressed proof
+    // first would run the counted permutation.
+    let (_proof, vk) = read_artifact(name)?;
+    let (proof, shrink_vk) = read_shrink(name)?;
+    let verifier = shrink_verifier(shrink_vk.clone());
+    count_verify("shrink proof", out, || {
+        verify_shrink(&verifier, &proof, &vk)
+    })?;
+    // Both checks hash a key with the counted permutation, so they run after
+    // the ledger is read.
+    check_shrink_manifest(&shrink_vk)?;
+    check_manifest(name, &vk)
+}
+
+/// Writes the proof-system parameters the shrink verifier is compiled with
+/// (`sp1-primitives::fri_params::shrink_fri_config`, `sp1-prover::components`),
+/// after checking the shrink proof verifies.
+fn shrink_params(name: &str, out: &str) -> Result<()> {
+    let (_proof, vk) = load_artifact(name)?;
+    let (proof, shrink_vk) = read_shrink(name)?;
+    check_shrink_manifest(&shrink_vk)?;
+    verify_shrink(&shrink_verifier(shrink_vk), &proof, &vk)?;
+    let fri = shrink_fri_config();
+    let params = Params {
+        system: "sp1",
+        version: lock_version("sp1-sdk"),
+        artifact: "shrink proof",
+        field: FieldParams {
+            base: "koalabear",
+            modulus: SP1Field::ORDER_U32,
+            extension_degree: size_of::<SP1ExtensionField>() / size_of::<SP1Field>(),
+        },
+        fri: FriParams {
+            log_blowup: fri.log_blowup,
+            queries: fri.num_queries,
+            log_fold: 1,
+            pow_bits: fri.proof_of_work_bits,
+        },
+        log_stacking_height: SHRINK_LOG_STACKING_HEIGHT,
+        max_log_row_count: SHRINK_MAX_LOG_ROW_COUNT,
+        security: Security {
+            stated_bits: SP1_TARGET_BITS_OF_SECURITY,
+            basis: "unique decoding: queries = ceil((target - pow_bits) / -log2((1 + rate) / 2))",
+            source: "sp1-primitives/src/fri_params.rs",
+        },
+    };
+    assert_eq!(fri.proof_of_work_bits, SP1_SHRINK_WRAP_POW_BITS);
+    std::fs::write(out, format!("{}\n", serde_json::to_string_pretty(&params)?))?;
+    println!("{}", serde_json::to_string_pretty(&params)?);
     Ok(())
 }
 
@@ -459,6 +705,24 @@ fn main() -> Result<()> {
             args.get(3)
                 .map_or("../results/sp1/params.json", String::as_str),
         ),
-        _ => bail!("usage: script prove|size|count|params <trivial|fib|journal> [out.json]"),
+        (Some("shrink"), Some(g)) => shrink(g),
+        (Some("shrink-size"), Some(g)) => shrink_size(
+            g,
+            args.get(3)
+                .map_or("../results/sp1/shrink/size.json", String::as_str),
+        ),
+        (Some("shrink-count"), Some(g)) => shrink_count(
+            g,
+            args.get(3)
+                .map_or("../results/sp1/shrink/ops.json", String::as_str),
+        ),
+        (Some("shrink-params"), Some(g)) => shrink_params(
+            g,
+            args.get(3)
+                .map_or("../results/sp1/shrink/params.json", String::as_str),
+        ),
+        _ => bail!(
+            "usage: script prove|size|count|params|shrink|shrink-size|shrink-count|shrink-params <trivial|fib|journal> [out.json]"
+        ),
     }
 }
