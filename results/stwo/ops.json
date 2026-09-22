@@ -27,7 +27,12 @@
     "ops": {
       "inv": 23,
       "div": 910,
-      "guess": 208743
+      "m31_inv_calls": 78,
+      "m31_inv": 5460,
+      "m31_inv_vars": 1404,
+      "guess": 208743,
+      "guess_for_inversions": 2337,
+      "guess_other": 206406
     }
   },
   "n_vars": 6094390

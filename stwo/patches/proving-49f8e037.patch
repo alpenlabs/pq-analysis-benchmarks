@@ -1,0 +1,36 @@
+diff --git a/crates/circuits/src/simd.rs b/crates/circuits/src/simd.rs
+index 3d463a6..cd56c7c 100644
+--- a/crates/circuits/src/simd.rs
++++ b/crates/circuits/src/simd.rs
+@@ -163,6 +163,10 @@ impl Simd {
+     ///
+     /// In particular, guarantees that all values are non-zero.
+     pub fn inv(&self, context: &mut Context<impl IValue>) -> Simd {
++        // stark-boolean-verifier patch: count the inversions hidden in the guess.
++        context.stats.simd_inv += 1;
++        context.stats.simd_inv_lanes += self.len;
++        context.stats.simd_inv_vars += self.data.len();
+         let res = self.guess_inv_or_zero(context);
+         let prod = Simd::mul(context, &res, self);
+         let one = Simd::one(context, self.len);
+diff --git a/crates/circuits/src/stats.rs b/crates/circuits/src/stats.rs
+index 2a3aace..2b34ff3 100644
+--- a/crates/circuits/src/stats.rs
++++ b/crates/circuits/src/stats.rs
+@@ -18,4 +18,16 @@ pub struct Stats {
+     pub outputs: usize,
+     pub triple_xor: usize,
+     pub m31_to_u32: usize,
++    /// Added by the stark-boolean-verifier patch; not part of upstream.
++    /// The number of [crate::simd::Simd::inv] calls. Each inverts `len` `M31`
++    /// values at once (one per lane) through `guess_inv_or_zero`, so its
++    /// inversions are otherwise visible only as [Self::guess], [Self::mul]
++    /// and [Self::equals] increments.
++    pub simd_inv: usize,
++    /// Added by the stark-boolean-verifier patch. The total `len` over
++    /// [Self::simd_inv] calls: the number of `M31` inversions performed.
++    pub simd_inv_lanes: usize,
++    /// Added by the stark-boolean-verifier patch. The number of `QM31`
++    /// variables guessed by [Self::simd_inv] calls (`ceil(len / 4)` each).
++    pub simd_inv_vars: usize,
+ }

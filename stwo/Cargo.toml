@@ -26,3 +26,36 @@ stwo-run-and-prove-recursive-tree = { git = "https://github.com/starkware-libs/p
 
 [profile.release]
 lto = true
+
+# Every crate of the pinned starkware-libs/proving revision that this workspace
+# uses, redirected to the checkout patch.sh makes under patched/proving so that
+# the operation counters in patches/ (crates/circuits only) are compiled in.
+# All of them must be redirected together, or Cargo would build two copies of
+# the crates they share.
+[patch."https://github.com/starkware-libs/proving"]
+cairo-air = { path = "patched/proving/crates/cairo-air" }
+cairo-program-runner-lib = { path = "patched/proving/crates/cairo-program-runner-lib" }
+circuit-cairo-serialize = { path = "patched/proving/crates/circuit_cairo_serialize" }
+circuit-cairo-verifier = { path = "patched/proving/crates/cairo_verifier" }
+circuit-common = { path = "patched/proving/crates/circuit_common" }
+circuit-multiverifier = { path = "patched/proving/crates/circuit_multiverifier" }
+circuit-prover = { path = "patched/proving/crates/circuit_prover" }
+circuit-registry = { path = "patched/proving/crates/circuit_registry" }
+circuit-serialize = { path = "patched/proving/crates/circuit_serialize" }
+circuit-verifier = { path = "patched/proving/crates/circuit_verifier" }
+circuits = { path = "patched/proving/crates/circuits" }
+circuits-stark-verifier = { path = "patched/proving/crates/stark_verifier" }
+leaf-proof-format = { path = "patched/proving/crates/leaf_proof_format" }
+leaf-prover = { path = "patched/proving/crates/leaf_prover" }
+stwo = { path = "patched/proving/crates/stwo" }
+stwo-air-utils = { path = "patched/proving/crates/air-utils" }
+stwo-air-utils-derive = { path = "patched/proving/crates/air-utils-derive" }
+stwo-cairo-adapter = { path = "patched/proving/crates/adapter" }
+stwo-cairo-common = { path = "patched/proving/crates/common" }
+stwo-cairo-dev-utils = { path = "patched/proving/crates/dev_utils" }
+stwo-cairo-prover = { path = "patched/proving/crates/prover" }
+stwo-cairo-serialize = { path = "patched/proving/crates/cairo-serialize" }
+stwo-cairo-serialize-derive = { path = "patched/proving/crates/cairo-serialize-derive" }
+stwo-cairo-utils = { path = "patched/proving/crates/utils" }
+stwo-constraint-framework = { path = "patched/proving/crates/constraint-framework" }
+stwo-run-and-prove-recursive-tree = { path = "patched/proving/crates/stwo_run_and_prove_recursive_tree" }

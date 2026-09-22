@@ -153,6 +153,9 @@ jobs:
           cache-on-failure: true
           workspaces: stwo
 
+      - name: Apply proving patch
+        run: ./stwo/patch.sh
+
       - name: size
         working-directory: stwo
         env:

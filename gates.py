@@ -85,9 +85,12 @@ COSTS = {
 # Which measured QM31 multiplication gadget prices Stwo's `mul` gates. The gate
 # is a field multiplication; the Boolean gadget's layout is a choice. stwo's
 # own code (crates/stwo/src/core/fields/{cm31,qm31}.rs) is schoolbook at both
-# levels and multiplies by R = 2 + i as a general CM31 product; Karatsuba at
-# both levels with R applied by adds is about half the gates. Both are
-# measured; the estimate uses Karatsuba and records the other.
+# levels and multiplies by R = 2 + i as a general CM31 product, a layout no
+# Boolean-circuit implementer would copy; Karatsuba at both levels with R
+# applied by adds is about half the gates. Both are measured; the estimate
+# uses Karatsuba and records the other. Risc0's and SP1's extension
+# multiplications get no such discount: their ledgers count base operations,
+# so they are priced as their code performs them (see README, Gate estimate).
 QM31_MUL = "mul"
 
 POSEIDON2_GADGET = {"risc0": "poseidon2_babybear_w24", "sp1": "poseidon2_koalabear_w16"}
@@ -228,12 +231,42 @@ def poseidon2_system(name, path):
     )
 
 
+# Stwo's verifier circuit does not compute inversions: `ops::inv`, `ops::div`
+# and `Simd::inv` take the result as a prover hint and check it with one
+# multiplication and one equality. With the proof as the circuit's only
+# input, the inverses have to be computed in-circuit, and they are priced as
+# stwo's own field code computes them (crates/stwo/src/core/fields/), per
+# element, in M31 multiplications (squarings priced as multiplications; the
+# few additions are ignored):
+#   M31:  pow2147483645, an addition chain of 30 squarings + 7 products.
+#   CM31: (a - bi) / (a^2 + b^2): 2 squarings, one M31 inverse, 2 products.
+#   QM31: (a - bu) / (a^2 - (2 + i) b^2): 2 CM31 squarings, one CM31 inverse,
+#         2 CM31 products; a CM31 product is 3 M31 products in the Karatsuba
+#         layout the QM31 gadget uses (4 in stwo's schoolbook layout).
+# The hint-check multiplication and equality that the computed inverse would
+# make redundant are left in the count.
+M31_INV_MULS = 37
+CM31_INV_MULS = 2 + M31_INV_MULS + 2
+CM31_MUL_MULS = 3 if QM31_MUL == "mul" else 4
+QM31_INV_MULS = 4 * CM31_MUL_MULS + CM31_INV_MULS
+
+
 def stwo_system(path):
     ledger = json.load(open(path))
     gates = ledger["field"]["gates"]
+    ops = ledger["field"]["ops"]
     q = COSTS["qm31"]
+    m31_mul = COSTS["m31"]["mul"]
     price = {"mul": q[QM31_MUL], "pointwise_mul": q["pointwise_mul"], "add": q["add"], "sub": q["sub"]}
-    residual = sum(gates[g] * nonfree(c) for g, c in price.items())
+    inversions = {
+        "m31": ops["m31_inv"],
+        "qm31": ops["inv"] + ops["div"],
+        "m31_muls_each": {"m31": M31_INV_MULS, "qm31": QM31_INV_MULS},
+        "m31_muls": ops["m31_inv"] * M31_INV_MULS + (ops["inv"] + ops["div"]) * QM31_INV_MULS,
+    }
+    inversions["nonfree"] = inversions["m31_muls"] * nonfree(m31_mul)
+    inversions["xor"] = inversions["m31_muls"] * xor(m31_mul)
+    residual = sum(gates[g] * nonfree(c) for g, c in price.items()) + inversions["nonfree"]
     compressions = ledger["hash"]["compressions"]
     h = COSTS["blake2s_compression"]
     return row(
@@ -241,12 +274,14 @@ def stwo_system(path):
         path,
         compressions,
         residual,
-        sum(gates[g] * xor(c) for g, c in price.items()),
+        sum(gates[g] * xor(c) for g, c in price.items()) + inversions["xor"],
         compressions * nonfree(h),
         compressions * xor(h),
         {
+            "inversions": inversions,
             "residual_field_with_schoolbook_mul": residual + gates["mul"] * (nonfree(q["mul_schoolbook"]) - nonfree(q[QM31_MUL])),
-            "note": "QM31 mul gates priced with the Karatsuba gadget; residual_field_with_schoolbook_mul uses stwo's own layout",
+            "note": "QM31 mul gates priced with the Karatsuba gadget; residual_field_with_schoolbook_mul uses stwo's own layout; "
+            "inversions are the hint-supplied inverses priced as computed in-circuit",
         },
     )
 
@@ -326,11 +361,12 @@ def render_table(rows, baseline):
         "\\* The STARK rows price every field operation the shipped verifier performs,",
         "the multiplications inside inversions and exponentiations included, plus the",
         "hash units. Nothing is supplied as a witness: the circuit's only input is the",
-        "proof. Stwo's equality checks, permutation networks, hint wires and",
-        "field-to-word re-encodings are counted in its ledger but not priced (see",
-        "[Gate estimate](#gate-estimate)); pricing them at this repository's gadget",
-        "costs would raise the Stwo figures by an estimated 1-2%. The Groth16 row is",
-        "the complete verifier circuit.",
+        "proof, so the inverses Stwo's circuit takes as prover hints are priced as",
+        "computed in-circuit by stwo's own field routines (see",
+        "[Gate estimate](#gate-estimate)). Stwo's equality checks are counted but not",
+        "priced (about 0.05%); its permutation gates and field-to-word re-encodings",
+        "are fixed rewiring in a Boolean circuit. The Groth16 row is the complete",
+        "verifier circuit.",
         "",
         "\u2020 Produced by the unmodified prover but not returned by its API, so it is",
         "reachable only by calling into the prover directly (see [Shrink](#shrink)).",

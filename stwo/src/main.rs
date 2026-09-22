@@ -267,8 +267,11 @@ struct Field {
     base: &'static str,
     /// Gate counts from the finalized circuit (`Circuit`).
     gates: FieldGates,
-    /// Higher-level operations that the gates above already include:
-    /// `inv` and `div` each add one `guess`, one `mul` and one `eq`.
+    /// Higher-level operations that the gates above already include.
+    /// Inversions are not computed by the circuit: `inv`, `div` and
+    /// `Simd::inv` each guess the result (a prover hint) and check it with
+    /// one `mul` and one `eq`. The gate estimate prices them as computed
+    /// in-circuit, since the verifier circuit's only input is the proof.
     ops: FieldOps,
 }
 
@@ -286,9 +289,25 @@ struct FieldGates {
 
 #[derive(Serialize)]
 struct FieldOps {
+    /// `ops::inv`: QM31 inversions, one guess each.
     inv: usize,
+    /// `ops::div`: QM31 divisions, one guess each.
     div: usize,
+    /// `Simd::inv` calls (FRI twiddles), each inverting `len` M31 values at
+    /// once. Counted by `patches/proving-49f8e037.patch`.
+    m31_inv_calls: usize,
+    /// M31 inversions performed by those calls (the sum of their `len`).
+    m31_inv: usize,
+    /// QM31 variables guessed by those calls (`ceil(len / 4)` each).
+    m31_inv_vars: usize,
+    /// All guessed (prover-supplied) variables.
     guess: usize,
+    /// `inv + div + m31_inv_vars`: the guesses that are inversion results.
+    guess_for_inversions: usize,
+    /// The rest: the proof and public inputs entering the circuit (the
+    /// circuit's actual input) and bit decompositions of values already in
+    /// the circuit, both free in a Boolean circuit. See the README.
+    guess_other: usize,
 }
 
 fn count(name: &str, out: &str) -> Result<()> {
@@ -328,7 +347,12 @@ fn count(name: &str, out: &str) -> Result<()> {
             ops: FieldOps {
                 inv: s.inv,
                 div: s.div,
+                m31_inv_calls: s.simd_inv,
+                m31_inv: s.simd_inv_lanes,
+                m31_inv_vars: s.simd_inv_vars,
                 guess: s.guess,
+                guess_for_inversions: s.inv + s.div + s.simd_inv_vars,
+                guess_other: s.guess - s.inv - s.div - s.simd_inv_vars,
             },
         },
         n_vars: c.n_vars,
@@ -351,6 +375,18 @@ fn count(name: &str, out: &str) -> Result<()> {
     ] {
         println!("{n:>8}  {name} gates");
     }
+    let o = &f.ops;
+    println!(
+        "guesses = {} = {} inversion results ({} qm31 inv + {} qm31 div + {} qm31 vars holding {} m31 inversions in {} Simd::inv calls) + {} proof, public input and bit-decomposition wires",
+        o.guess,
+        o.guess_for_inversions,
+        o.inv,
+        o.div,
+        o.m31_inv_vars,
+        o.m31_inv,
+        o.m31_inv_calls,
+        o.guess_other
+    );
     Ok(())
 }
 
@@ -505,8 +541,22 @@ fn lock_version(name: &str) -> String {
             let rev = &src.rsplit('#').next().unwrap()[..8];
             format!("{repo}@{rev}")
         }
-        None => version.to_string(),
+        // The proving crates are redirected to the patched checkout (see
+        // patch.sh), so the lock has no source for them; the revision is the
+        // one Cargo.toml pins for the git dependencies they replace.
+        None => manifest_git_rev().unwrap_or_else(|| version.to_string()),
     }
+}
+
+/// `starkware-libs/proving@<rev>` from the first git dependency on that
+/// repository in Cargo.toml, which pins the revision patch.sh checks out.
+fn manifest_git_rev() -> Option<String> {
+    let manifest = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/./Cargo.toml"));
+    let line = manifest
+        .lines()
+        .find(|l| l.contains("git = \"https://github.com/starkware-libs/proving\""))?;
+    let rev = line.split("rev = \"").nth(1)?.split('"').next()?;
+    Some(format!("starkware-libs/proving@{}", &rev[..8]))
 }
 
 fn main() -> Result<()> {

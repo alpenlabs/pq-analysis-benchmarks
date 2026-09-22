@@ -73,7 +73,7 @@ lint-fix: fmt-toml fmt-ws lint-fix-ws lint-fix-codespell
 
 # Re-derive the committed results from the committed artifacts (what CI runs)
 [group('check')]
-check: patch-risc0 patch-sp1
+check: patch-risc0 patch-sp1 patch-stwo
     #!/usr/bin/env bash
     set -euo pipefail
     cd risc0
@@ -132,6 +132,11 @@ patch-risc0:
 patch-sp1:
     ./sp1/patch.sh
 
+# Fetch the pinned starkware-libs/proving revision and apply stwo/patches/ into stwo/patched/
+[group('prerequisites')]
+patch-stwo:
+    ./stwo/patch.sh
+
 # Prove the Risc0 guests and write artifacts/risc0/<guest>.bin (needs r0vm)
 [group('prove')]
 prove-risc0: patch-risc0
@@ -167,7 +172,7 @@ shrink-sp1: patch-sp1
 
 # Prove the Stwo guests and write artifacts/stwo/<guest>.bin
 [group('prove')]
-prove-stwo:
+prove-stwo: patch-stwo
     #!/usr/bin/env bash
     set -euo pipefail
     cd stwo
