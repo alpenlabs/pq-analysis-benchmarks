@@ -22,9 +22,10 @@ deployed hash it assumes a fork of prover and verifier that does not exist.
 Only field arithmetic and hash units are priced. Every field operation of the
 shipped verifier is priced, the multiplications inside exponentiations and
 inversions included (`pow.mul` is added to `residual`): the verifier circuit's
-only input is the proof, so nothing is supplied as a witness. Stwo's equality
-checks, permutation networks, hint wires and re-encodings between field and
-32-bit words are counted in its ledger but not priced here.
+only input is the proof, so nothing is supplied as a witness, and the inverses
+Stwo's circuit takes as prover hints are priced as computed in-circuit (see
+stwo_system). Stwo's equality checks are counted but not priced; its
+permutation gates and field-to-word re-encodings are fixed rewiring.
 """
 
 import json
@@ -240,7 +241,7 @@ def poseidon2_system(name, path):
 # few additions are ignored):
 #   M31:  pow2147483645, an addition chain of 30 squarings + 7 products.
 #   CM31: (a - bi) / (a^2 + b^2): 2 squarings, one M31 inverse, 2 products.
-#   QM31: (a - bu) / (a^2 - (2 + i) b^2): 2 CM31 squarings, one CM31 inverse,
+#   QM31: (a - b*u) / (a^2 - (2 + i) b^2): 2 CM31 squarings, one CM31 inverse,
 #         2 CM31 products; a CM31 product is 3 M31 products in the Karatsuba
 #         layout the QM31 gadget uses (4 in stwo's schoolbook layout).
 # The hint-check multiplication and equality that the computed inverse would
