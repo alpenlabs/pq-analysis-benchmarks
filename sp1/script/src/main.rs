@@ -274,11 +274,11 @@ struct Pow {
     /// `exp_u64_by_squaring` calls (one per FRI query); their multiplication
     /// count depends on the exponent bits.
     calls: u64,
-    /// KoalaBear `try_inverse` calls during verification, a fixed 29 squarings
-    /// + 7 multiplications each, counted in `residual`. Extension-field
-    /// inverses bottom out in one base inverse each; the verifier's are the
-    /// FRI fold divisors (one per query per round) and the GKR output
-    /// denominators.
+    /// KoalaBear `try_inverse` calls during verification, a fixed 29
+    /// squarings and 7 multiplications each, counted in `residual`.
+    /// Extension-field inverses bottom out in one base inverse each; the
+    /// verifier's are the FRI fold divisors (one per query per round) and
+    /// the GKR output denominators.
     inv_calls: u64,
     /// Multiplications performed inside the `exp_u64_by_squaring` calls. Kept
     /// out of `residual` because the count varies with the proof, so
