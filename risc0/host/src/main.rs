@@ -189,7 +189,7 @@ fn count(name: &str, out: &str) -> Result<()> {
         println!("babybear {name}: {t} measured = {h} in hash suite + {r} residual");
     }
     println!(
-        "  (mul: + {} inside {} pow calls, exponent-dependent, not in the ledger)",
+        "  (mul: + {} inside {} pow calls, exponent-dependent, recorded as pow.mul)",
         total.pow_mul, f.pow.calls
     );
     Ok(())

@@ -19,9 +19,12 @@ unchanged. That mapping is exact for Merkle 2-to-1 compressions and
 approximate for sponge absorbs and Fiat-Shamir squeezes, and other than the
 deployed hash it assumes a fork of prover and verifier that does not exist.
 
-Only field arithmetic and hash units are priced. Equality checks, permutation
-networks, witness wires and re-encodings between field and 32-bit words are
-counted in the ledgers but not priced here.
+Only field arithmetic and hash units are priced. Every field operation of the
+shipped verifier is priced, the multiplications inside exponentiations and
+inversions included (`pow.mul` is added to `residual`): the verifier circuit's
+only input is the proof, so nothing is supplied as a witness. Stwo's equality
+checks, permutation networks, hint wires and re-encodings between field and
+32-bit words are counted in its ledger but not priced here.
 """
 
 import json
@@ -129,6 +132,17 @@ def field_cost(ops, prices, kind=nonfree):
     return sum(ops.get(k, 0) * kind(prices[k]) for k in ("mul", "add", "sub"))
 
 
+def residual_ops(field):
+    """The verifier's non-hash arithmetic: `residual` plus the multiplications
+    inside `pow`, which the ledgers record separately because their number
+    varies with the proof (the exponents are Fiat-Shamir derived query
+    positions). They are computed in-circuit like everything else, so they
+    are priced."""
+    ops = dict(field["residual"])
+    ops["mul"] += field["pow"]["mul"]
+    return ops
+
+
 def poseidon2_cost(name, prices, ledger):
     m = POSEIDON2[name]
     f = ledger["field"]
@@ -195,15 +209,18 @@ def poseidon2_system(name, path):
     prices = COSTS[f["base"]]
     perms = ledger["hash"]["permutations"]["total"]
     perm = COSTS[POSEIDON2_GADGET[name]]
+    residual = residual_ops(f)
     return row(
         ledger,
         path,
         perms,
-        field_cost(f["residual"], prices),
-        field_cost(f["residual"], prices, xor),
+        field_cost(residual, prices),
+        field_cost(residual, prices, xor),
         perms * nonfree(perm),
         perms * xor(perm),
         {
+            "residual_ops": residual,
+            "pow_mul_priced": f["pow"]["mul"] * nonfree(prices["mul"]),
             "hash_priced_from_ops": field_cost(f["in_hash_suite"], prices),
             "poseidon2": poseidon2_cost(name, prices, ledger),
             "note": "hash_priced_from_ops is the same hash priced per counted field operation, for comparison with the measured permutation gadget",
@@ -306,13 +323,14 @@ def render_table(rows, baseline):
     line("groth16 bn254 (baseline)", "-", ref["proof_bytes"], ref["nonfree"], ref["xor"])
     lines += [
         "",
-        "\\* The STARK rows price field arithmetic and hash units; equality checks,",
-        "permutation networks, inversions supplied as witnesses and the multiplications",
-        "inside data-dependent exponentiations are counted in the ledgers but not priced",
-        "(see [Gate estimate](#gate-estimate)). Pricing them at this repository's gadget",
-        "costs would raise the as-deployed figures by well under 1% for Risc0 and SP1 and",
-        "by an estimated 1-2% for Stwo, and the Risc0 BLAKE3-swap figure by about 5%.",
-        "The Groth16 row is the complete verifier circuit.",
+        "\\* The STARK rows price every field operation the shipped verifier performs,",
+        "the multiplications inside inversions and exponentiations included, plus the",
+        "hash units. Nothing is supplied as a witness: the circuit's only input is the",
+        "proof. Stwo's equality checks, permutation networks, hint wires and",
+        "field-to-word re-encodings are counted in its ledger but not priced (see",
+        "[Gate estimate](#gate-estimate)); pricing them at this repository's gadget",
+        "costs would raise the Stwo figures by an estimated 1-2%. The Groth16 row is",
+        "the complete verifier circuit.",
         "",
         "\u2020 Produced by the unmodified prover but not returned by its API, so it is",
         "reachable only by calling into the prover directly (see [Shrink](#shrink)).",

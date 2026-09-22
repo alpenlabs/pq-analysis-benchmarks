@@ -50,7 +50,8 @@
     },
     "pow": {
       "calls": 2343,
-      "inv_calls": 450
+      "inv_calls": 450,
+      "mul": 37825
     },
     "mul_per_permutation": 1572
   }

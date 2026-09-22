@@ -81,7 +81,7 @@ check: patch-risc0 patch-sp1
         RISC0_SKIP_BUILD=1 cargo run --release --locked -p host -- size "$g" "size-$g.json"
         diff "size-$g.json" ../results/risc0/size.json
         RISC0_SKIP_BUILD=1 cargo run --release --locked -p host -- count "$g" "count-$g.json"
-        diff "count-$g.json" ../results/risc0/ops.json
+        python3 ../ledger_diff.py "count-$g.json" ../results/risc0/ops.json
         RISC0_SKIP_BUILD=1 cargo run --release --locked -p host -- params "$g" "params-$g.json"
         diff "params-$g.json" ../results/risc0/params.json
     done
@@ -90,13 +90,13 @@ check: patch-risc0 patch-sp1
         SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- size "$g" "size-$g.json"
         diff "size-$g.json" ../results/sp1/size.json
         SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- count "$g" "count-$g.json"
-        diff "count-$g.json" ../results/sp1/ops.json
+        python3 ../ledger_diff.py "count-$g.json" ../results/sp1/ops.json
         SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- params "$g" "params-$g.json"
         diff "params-$g.json" ../results/sp1/params.json
         SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- shrink-size "$g" "shrink-size-$g.json"
         diff "shrink-size-$g.json" ../results/sp1/shrink/size.json
         SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- shrink-count "$g" "shrink-count-$g.json"
-        diff "shrink-count-$g.json" ../results/sp1/shrink/ops.json
+        python3 ../ledger_diff.py "shrink-count-$g.json" ../results/sp1/shrink/ops.json
         SP1_SKIP_PROGRAM_BUILD=true cargo run --release --locked -- shrink-params "$g" "shrink-params-$g.json"
         diff "shrink-params-$g.json" ../results/sp1/shrink/params.json
     done
