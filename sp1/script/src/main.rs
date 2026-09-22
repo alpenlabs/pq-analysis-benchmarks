@@ -274,8 +274,11 @@ struct Pow {
     /// `exp_u64_by_squaring` calls (one per FRI query); their multiplication
     /// count depends on the exponent bits.
     calls: u64,
-    /// KoalaBear `try_inverse` calls, a fixed 29 squarings + 7 multiplications
-    /// each, counted in `residual`.
+    /// KoalaBear `try_inverse` calls during verification, a fixed 29 squarings
+    /// + 7 multiplications each, counted in `residual`. Extension-field
+    /// inverses bottom out in one base inverse each; the verifier's are the
+    /// FRI fold divisors (one per query per round) and the GKR output
+    /// denominators.
     inv_calls: u64,
     /// Multiplications performed inside the `exp_u64_by_squaring` calls. Kept
     /// out of `residual` because the count varies with the proof, so
@@ -302,30 +305,54 @@ fn count_verify(
     // number depends on how rayon splits the work; one thread makes the
     // count deterministic and equal to the sequential verifier's.
     std::env::set_var("RAYON_NUM_THREADS", "1");
-    let before = [&c::MUL, &c::ADD, &c::SUB].map(load);
+    // Every counter is read as its change across `verify`, so that nothing
+    // done before it enters the ledger. That matters: constructing the
+    // verifier (`SP1Verifier::new`) builds SP1's RISC-V and recursion
+    // machines, which evaluates every AIR once on concrete field values and
+    // performs about 400 thousand multiplications and 10,806 inversions of
+    // constants. The caller constructs the verifier before calling this.
+    let counters = [
+        &c::MUL,
+        &c::ADD,
+        &c::SUB,
+        &c::POW_MUL,
+        &c::POW_ADD,
+        &c::POW_SUB,
+        &c::HASH_MUL,
+        &c::HASH_ADD,
+        &c::HASH_SUB,
+        &c::PERM_COMPRESS,
+        &c::PERM_SPONGE,
+        &c::PERM_DUPLEX,
+        &c::POW_CALLS,
+        &c::INV_CALLS,
+    ];
+    let before = counters.map(load);
     verify()?;
-    let d = |i: usize, a: &std::sync::atomic::AtomicU64| load(a) - before[i];
+    let after = counters.map(load);
+    let d = |i: usize| after[i] - before[i];
     let total = Ops {
-        mul: d(0, &c::MUL),
-        add: d(1, &c::ADD),
-        sub: d(2, &c::SUB),
+        mul: d(0),
+        add: d(1),
+        sub: d(2),
     };
     let in_pow = Ops {
-        mul: load(&c::POW_MUL),
-        add: load(&c::POW_ADD),
-        sub: load(&c::POW_SUB),
+        mul: d(3),
+        add: d(4),
+        sub: d(5),
     };
     let in_hash_suite = Ops {
-        mul: load(&c::HASH_MUL),
-        add: load(&c::HASH_ADD),
-        sub: load(&c::HASH_SUB),
+        mul: d(6),
+        add: d(7),
+        sub: d(8),
     };
     let perms = Perms {
-        truncated_permutation_compress: load(&c::PERM_COMPRESS),
-        padding_free_sponge: load(&c::PERM_SPONGE),
-        duplex_challenger: load(&c::PERM_DUPLEX),
-        total: load(&c::PERM_COMPRESS) + load(&c::PERM_SPONGE) + load(&c::PERM_DUPLEX),
+        truncated_permutation_compress: d(9),
+        padding_free_sponge: d(10),
+        duplex_challenger: d(11),
+        total: d(9) + d(10) + d(11),
     };
+    let (pow_calls, inv_calls) = (d(12), d(13));
     assert_eq!(in_hash_suite.mul % perms.total, 0);
     let ledger = Ledger {
         system: "sp1",
@@ -345,8 +372,8 @@ fn count_verify(
                 sub: total.sub - in_hash_suite.sub,
             },
             pow: Pow {
-                calls: load(&c::POW_CALLS),
-                inv_calls: load(&c::INV_CALLS),
+                calls: pow_calls,
+                inv_calls,
                 mul: in_pow.mul,
             },
             mul_per_permutation: in_hash_suite.mul / perms.total,
@@ -383,8 +410,11 @@ fn count_verify(
 
 fn count(name: &str, out: &str) -> Result<()> {
     let (proof, vk) = read_artifact(name)?;
+    // Constructed outside the counted closure: building the verifier's
+    // machines is not verification (see `count_verify`).
+    let prover = LightProver::new();
     count_verify("compressed proof", out, || {
-        LightProver::new().verify(&proof, &vk, None)?;
+        prover.verify(&proof, &vk, None)?;
         Ok(())
     })?;
     // Hashing the vk uses the counted permutation, so the manifest check
