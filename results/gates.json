@@ -225,27 +225,27 @@
       "proof_bytes": 1271786,
       "hash": "poseidon2-koalabear",
       "hash_units": 39589,
-      "residual_field": 3851655502,
-      "residual_field_xor": 9259386265,
+      "residual_field": 2966578918,
+      "residual_field_xor": 7147185008,
       "hash_as_deployed": 36677149872,
       "hash_as_deployed_xor": 98763628436,
-      "total_as_deployed": 40528805374,
+      "total_as_deployed": 39643728790,
       "total_with": {
-        "blake3": 4281116974,
-        "blake2s": 4459742542,
-        "poseidon2-babybear-w24": 102168403306,
-        "poseidon2-koalabear-w16": 40528805374
+        "blake3": 3396040390,
+        "blake2s": 3574665958,
+        "poseidon2-babybear-w24": 101283326722,
+        "poseidon2-koalabear-w16": 39643728790
       },
       "total_with_xor": {
-        "blake3": 11266073497,
-        "blake2s": 12117395353,
-        "poseidon2-babybear-w24": 266774271277,
-        "poseidon2-koalabear-w16": 108023014701
+        "blake3": 9153872240,
+        "blake2s": 10005194096,
+        "poseidon2-babybear-w24": 264662070020,
+        "poseidon2-koalabear-w16": 105910813444
       },
       "residual_ops": {
-        "mul": 1693985,
-        "add": 975935,
-        "sub": 176132
+        "mul": 1291317,
+        "add": 970112,
+        "sub": 150212
       },
       "pow_mul_priced": 8678970,
       "hash_priced_from_ops": 29955254384,

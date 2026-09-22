@@ -20,13 +20,13 @@
       "sub": 791780
     },
     "residual": {
-      "mul": 1690022,
-      "add": 975935,
-      "sub": 176132
+      "mul": 1287354,
+      "add": 970112,
+      "sub": 150212
     },
     "pow": {
       "calls": 124,
-      "inv_calls": 13414,
+      "inv_calls": 2608,
       "mul": 3963
     },
     "mul_per_permutation": 296
