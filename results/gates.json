@@ -327,25 +327,36 @@
       "proof_bytes": 545960,
       "hash": "blake2s",
       "hash_units": 15332,
-      "residual_field": 6423136222,
-      "residual_field_xor": 15171146682,
+      "residual_field": 6890868562,
+      "residual_field_xor": 16191607884,
       "hash_as_deployed": 235499520,
       "hash_as_deployed_xor": 1106847744,
-      "total_as_deployed": 6658635742,
+      "total_as_deployed": 7126368082,
       "total_with": {
-        "blake3": 6589457758,
-        "blake2s": 6658635742,
-        "poseidon2-babybear-w24": 44499176974,
-        "poseidon2-koalabear-w16": 20627436958
+        "blake3": 7057190098,
+        "blake2s": 7126368082,
+        "poseidon2-babybear-w24": 44966909314,
+        "poseidon2-koalabear-w16": 21095169298
       },
       "total_with_xor": {
-        "blake3": 15948295098,
-        "blake2s": 16277994426,
-        "poseidon2-babybear-w24": 114901329738,
-        "poseidon2-koalabear-w16": 53420255050
+        "blake3": 16968756300,
+        "blake2s": 17298455628,
+        "poseidon2-babybear-w24": 115921790940,
+        "poseidon2-koalabear-w16": 54440716252
       },
-      "residual_field_with_schoolbook_mul": 11227509826,
-      "note": "QM31 mul gates priced with the Karatsuba gadget; residual_field_with_schoolbook_mul uses stwo's own layout"
+      "inversions": {
+        "m31": 5460,
+        "qm31": 933,
+        "m31_muls_each": {
+          "m31": 37,
+          "qm31": 53
+        },
+        "m31_muls": 251469,
+        "nonfree": 467732340,
+        "xor": 1020461202
+      },
+      "residual_field_with_schoolbook_mul": 11695242166,
+      "note": "QM31 mul gates priced with the Karatsuba gadget; residual_field_with_schoolbook_mul uses stwo's own layout; inversions are the hint-supplied inverses priced as computed in-circuit"
     }
   ]
 }
