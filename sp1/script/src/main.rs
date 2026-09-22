@@ -260,8 +260,9 @@ struct Field {
     counted_at: &'static str,
     /// Spent inside the permutations counted above. Charged to the hash.
     in_hash_suite: Ops,
-    /// The verifier's own arithmetic, excluding the hash and the operations
-    /// inside `exp_u64_by_squaring`.
+    /// The verifier's own arithmetic, excluding the hash and the
+    /// multiplications inside `exp_u64_by_squaring` (recorded separately as
+    /// `pow.mul`). The 36 multiplications of each `try_inverse` are in here.
     residual: Ops,
     pow: Pow,
     /// `in_hash_suite.mul / permutations`; exact.
@@ -270,11 +271,20 @@ struct Field {
 
 #[derive(Serialize)]
 struct Pow {
-    /// `exp_u64_by_squaring` calls; their operation count depends on the
-    /// exponent bits, so it is kept out of `residual`.
+    /// `exp_u64_by_squaring` calls (one per FRI query); their multiplication
+    /// count depends on the exponent bits.
     calls: u64,
-    /// KoalaBear `try_inverse` calls, a fixed 29 squarings + 7 multiplications each.
+    /// KoalaBear `try_inverse` calls, a fixed 29 squarings + 7 multiplications
+    /// each, counted in `residual`.
     inv_calls: u64,
+    /// Multiplications performed inside the `exp_u64_by_squaring` calls. Kept
+    /// out of `residual` because the count varies with the proof, so
+    /// `residual` diffs exactly and this field is compared within a
+    /// tolerance. The gate estimate prices it with `residual`: the verifier
+    /// circuit's only input is the proof, so exponentiations are computed
+    /// in-circuit, not supplied as witnesses. (Additions and subtractions
+    /// inside `pow` are zero for KoalaBear and stay in `residual`.)
+    mul: u64,
 }
 
 fn load(a: &std::sync::atomic::AtomicU64) -> u64 {
@@ -331,12 +341,13 @@ fn count_verify(
             in_hash_suite,
             residual: Ops {
                 mul: total.mul - in_hash_suite.mul - in_pow.mul,
-                add: total.add - in_hash_suite.add - in_pow.add,
-                sub: total.sub - in_hash_suite.sub - in_pow.sub,
+                add: total.add - in_hash_suite.add,
+                sub: total.sub - in_hash_suite.sub,
             },
             pow: Pow {
                 calls: load(&c::POW_CALLS),
                 inv_calls: load(&c::INV_CALLS),
+                mul: in_pow.mul,
             },
             mul_per_permutation: in_hash_suite.mul / perms.total,
         },
@@ -364,8 +375,8 @@ fn count_verify(
         println!("koalabear {name}: {t} measured = {h} in hash suite + {r} residual");
     }
     println!(
-        "  (+ {} mul, {} add, {} sub inside {} pow calls, exponent-dependent, not in the ledger)",
-        in_pow.mul, in_pow.add, in_pow.sub, f.pow.calls
+        "  (+ {} mul inside {} pow calls, exponent-dependent, recorded as pow.mul; {} add, {} sub inside pow stay in residual)",
+        in_pow.mul, f.pow.calls, in_pow.add, in_pow.sub
     );
     Ok(())
 }

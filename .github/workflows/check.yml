@@ -57,7 +57,7 @@ jobs:
         run: |
           for g in trivial fib journal; do
             cargo run --release --locked -p host -- count "$g" "count-$g.json"
-            diff "count-$g.json" ../results/risc0/ops.json
+            python3 ../ledger_diff.py "count-$g.json" ../results/risc0/ops.json
           done
 
       - name: params
@@ -109,7 +109,7 @@ jobs:
         run: |
           for g in trivial fib journal; do
             cargo run --release --locked -- count "$g" "count-$g.json"
-            diff "count-$g.json" ../results/sp1/ops.json
+            python3 ../ledger_diff.py "count-$g.json" ../results/sp1/ops.json
           done
 
       - name: params
@@ -128,7 +128,7 @@ jobs:
             grep -q '^  891094  shard proof total$' "shrink-size-$g.txt"
             diff "shrink-size-$g.json" ../results/sp1/shrink/size.json
             cargo run --release --locked -- shrink-count "$g" "shrink-count-$g.json"
-            diff "shrink-count-$g.json" ../results/sp1/shrink/ops.json
+            python3 ../ledger_diff.py "shrink-count-$g.json" ../results/sp1/shrink/ops.json
             cargo run --release --locked -- shrink-params "$g" "shrink-params-$g.json"
             diff "shrink-params-$g.json" ../results/sp1/shrink/params.json
           done

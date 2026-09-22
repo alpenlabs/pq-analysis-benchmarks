@@ -289,9 +289,17 @@ pub struct Hash {
 pub struct Pow {
     /// `Elem::pow` calls, `inv` included. Each is square-and-multiply, so its
     /// multiplication count depends on the exponent bits (query positions are
-    /// Fiat-Shamir derived); those multiplications are kept out of `residual`.
+    /// Fiat-Shamir derived).
     pub calls: u64,
+    /// `Elem::inv` calls; each is `pow(P - 2)`, a fixed 61 multiplications.
     pub inv_calls: u64,
+    /// Multiplications performed inside those `pow` calls. Kept out of
+    /// `residual` because the count varies with the seal (by a few hundred
+    /// across guests), so `residual` diffs exactly and this field is compared
+    /// within a tolerance. The gate estimate prices it with `residual`: the
+    /// verifier circuit's only input is the proof, so exponentiations and
+    /// inversions are computed in-circuit, not supplied as witnesses.
+    pub mul: u64,
 }
 
 #[derive(Serialize)]
@@ -302,7 +310,7 @@ pub struct Field {
     /// `Rng::mix` digest absorption. Charged to the hash, not to the verifier.
     pub in_hash_suite: Ops,
     /// The verifier's own arithmetic, excluding the hash suite and the
-    /// multiplications inside `pow`.
+    /// multiplications inside `pow` (recorded separately as `pow.mul`).
     pub residual: Ops,
     pub pow: Pow,
     /// `in_hash_suite.mul / permutations`; exact, since only permutations multiply.
@@ -330,6 +338,7 @@ impl Counters {
             pow: Pow {
                 calls: total.pow_calls,
                 inv_calls: total.inv_calls,
+                mul: total.pow_mul,
             },
             mul_per_permutation: in_hash_suite.mul / perms,
         }

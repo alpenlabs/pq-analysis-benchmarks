@@ -174,23 +174,29 @@
       "proof_bytes": 222968,
       "hash": "poseidon2-babybear",
       "hash_units": 5693,
-      "residual_field": 1422348089,
-      "residual_field_xor": 3329001919,
+      "residual_field": 1501440164,
+      "residual_field_xor": 3511961444,
       "hash_as_deployed": 14138201148,
       "hash_as_deployed_xor": 37031302644,
-      "total_as_deployed": 15560549237,
+      "total_as_deployed": 15639641312,
       "total_with": {
-        "blake3": 1484105753,
-        "blake2s": 1509792569,
-        "poseidon2-babybear-w24": 15560549237,
-        "poseidon2-koalabear-w16": 6696616553
+        "blake3": 1563197828,
+        "blake2s": 1588884644,
+        "poseidon2-babybear-w24": 15639641312,
+        "poseidon2-koalabear-w16": 6775708628
       },
       "total_with_xor": {
-        "blake3": 3617568703,
-        "blake2s": 3739990975,
-        "poseidon2-babybear-w24": 40360304563,
-        "poseidon2-koalabear-w16": 17531465651
+        "blake3": 3800528228,
+        "blake2s": 3922950500,
+        "poseidon2-babybear-w24": 40543264088,
+        "poseidon2-koalabear-w16": 17714425176
       },
+      "residual_ops": {
+        "mul": 687212,
+        "add": 480016,
+        "sub": 31644
+      },
+      "pow_mul_priced": 79092075,
       "hash_priced_from_ops": 20389947228,
       "poseidon2": {
         "composition": {
@@ -219,23 +225,29 @@
       "proof_bytes": 1271786,
       "hash": "poseidon2-koalabear",
       "hash_units": 39589,
-      "residual_field": 3842976532,
-      "residual_field_xor": 9238683553,
+      "residual_field": 3851655502,
+      "residual_field_xor": 9259386265,
       "hash_as_deployed": 36677149872,
       "hash_as_deployed_xor": 98763628436,
-      "total_as_deployed": 40520126404,
+      "total_as_deployed": 40528805374,
       "total_with": {
-        "blake3": 4272438004,
-        "blake2s": 4451063572,
-        "poseidon2-babybear-w24": 102159724336,
-        "poseidon2-koalabear-w16": 40520126404
+        "blake3": 4281116974,
+        "blake2s": 4459742542,
+        "poseidon2-babybear-w24": 102168403306,
+        "poseidon2-koalabear-w16": 40528805374
       },
       "total_with_xor": {
-        "blake3": 11245370785,
-        "blake2s": 12096692641,
-        "poseidon2-babybear-w24": 266753568565,
-        "poseidon2-koalabear-w16": 108002311989
+        "blake3": 11266073497,
+        "blake2s": 12117395353,
+        "poseidon2-babybear-w24": 266774271277,
+        "poseidon2-koalabear-w16": 108023014701
       },
+      "residual_ops": {
+        "mul": 1693985,
+        "add": 975935,
+        "sub": 176132
+      },
+      "pow_mul_priced": 8678970,
       "hash_priced_from_ops": 29955254384,
       "poseidon2": {
         "composition": {
@@ -264,23 +276,29 @@
       "proof_bytes": 891034,
       "hash": "poseidon2-koalabear",
       "hash_units": 27734,
-      "residual_field": 2499593428,
-      "residual_field_xor": 6024293092,
+      "residual_field": 2505826168,
+      "residual_field_xor": 6039160596,
       "hash_as_deployed": 25694108832,
       "hash_as_deployed_xor": 69188675416,
-      "total_as_deployed": 28193702260,
+      "total_as_deployed": 28199935000,
       "total_with": {
-        "blake3": 2800451860,
-        "blake2s": 2925587668,
-        "poseidon2-babybear-w24": 71375207452,
-        "poseidon2-koalabear-w16": 28193702260
+        "blake3": 2806684600,
+        "blake2s": 2931820408,
+        "poseidon2-babybear-w24": 71381440192,
+        "poseidon2-koalabear-w16": 28199935000
       },
       "total_with_xor": {
-        "blake3": 7430074084,
-        "blake2s": 8026466020,
-        "poseidon2-babybear-w24": 186425864764,
-        "poseidon2-koalabear-w16": 75212968508
+        "blake3": 7444941588,
+        "blake2s": 8041333524,
+        "poseidon2-babybear-w24": 186440732268,
+        "poseidon2-koalabear-w16": 75227836012
       },
+      "residual_ops": {
+        "mul": 1088804,
+        "add": 845876,
+        "sub": 136180
+      },
+      "pow_mul_priced": 6232740,
       "hash_priced_from_ops": 20985097504,
       "poseidon2": {
         "composition": {

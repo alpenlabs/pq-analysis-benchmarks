@@ -26,7 +26,8 @@
     },
     "pow": {
       "calls": 94,
-      "inv_calls": 12626
+      "inv_calls": 12626,
+      "mul": 2846
     },
     "mul_per_permutation": 296
   }
