@@ -359,22 +359,14 @@ def render_table(rows, baseline):
     line("groth16 bn254 (baseline)", "-", ref["proof_bytes"], ref["nonfree"], ref["xor"])
     lines += [
         "",
-        "\\* The STARK rows price every field operation the shipped verifier performs,",
-        "the multiplications inside inversions and exponentiations included, plus the",
-        "hash units. Nothing is supplied as a witness: the circuit's only input is the",
-        "proof, so the inverses Stwo's circuit takes as prover hints are priced as",
-        "computed in-circuit by stwo's own field routines (see",
-        "[Gate estimate](#gate-estimate)). Stwo's equality checks are counted but not",
-        "priced (about 0.05%); its permutation gates and field-to-word re-encodings",
-        "are fixed rewiring in a Boolean circuit. The Groth16 row is the complete",
-        "verifier circuit.",
+        "\\* Includes field arithmetic, inversion and exponentiation work, and hashes.",
+        "Stwo's hinted inverses are priced as in-circuit computations; equality checks",
+        "(about 0.05%) and fixed rewiring are not priced.",
         "",
-        "\u2020 Produced by the unmodified prover but not returned by its API, so it is",
-        "reachable only by calling into the prover directly (see [Shrink](#shrink)).",
-        "Every other STARK row is the artifact its system's own API hands back.",
+        "\u2020 Produced by SP1's unmodified prover but not returned by its public API.",
         "",
-        "\u2021 Assumes a fork of prover and verifier that does not exist: the hash is",
-        "replaced one-for-one and the field arithmetic left unchanged.",
+        "\u2021 Hypothetical one-for-one hash replacement; no such prover or verifier fork",
+        "exists.",
     ]
     return "\n".join(lines)
 
